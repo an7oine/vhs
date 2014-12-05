@@ -32,6 +32,9 @@ cd "${tmp}"
 trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" EXIT
 trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 
+# Cygwin-paikkaus
+[[ "$( uname )" =~ cygwin ]] && tmp="$( cygpath -m "$tmp" )"
+
 
 #######
 # TARVITTAVAT ULKOISET APUOHJELMAT
@@ -364,8 +367,9 @@ function areena-worker {
 		# aseta radio-ohjelman jakson nimi raidan nimeksi
 		title="$( sed -n '/title:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
 		# etsi sopiva AAC-koodekki ja aseta mp3-ääni koodattavaksi aac-muotoon
-		if [ -n "$( ffprobe -codecs 2>/dev/null |grep libfaac )" ]; then audio_recode="-acodec libfaac"
-		elif [ -n "$( ffprobe -codecs 2>/dev/null |grep libfdk_aac )" ]; then audio_recode="-acodec libfdk_aac"
+		if [ -n "$( ffmprg -codecs 2>/dev/null |grep libfaac )" ]; then audio_recode="-acodec libfaac"
+		elif [ -n "$( ffmpeg -codecs 2>/dev/null |grep libfdk_aac )" ]; then audio_recode="-acodec libfdk_aac"
+		elif [ -n "$( ffmpeg -codecs 2>/dev/null |grep libvo_aacenc )" ]; then audio_recode="-acodec libvo_aacenc"
 		else echo "*** VIRHE: ffmpeg-yhteensopivaa AAC-koodekkia ei löydy ***"; exit -3;
 		fi
 	 else product="${tmp}/vhs.m4v"
