@@ -647,19 +647,28 @@ case "$1" in
 		record-regex "^$( escape-regex <<<"$programme" )$" "${programme}" /dev/null && echo
 	done
 	;;
+ i|interactive)
+	while read cmdline
+	 do
+	 	[ "$cmdline" != "q" -a "$cmdline" != "quit" ] || break
+	 	$0 $cmdline
+	done
+	;;
  *)
-	echo "vhs.sh [versio $script_version] : skripti kotimaisten internet-mediasisältöjen automaattiseen tallennukseen"
-	echo "                      Tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo, TV5"
+	echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
 	echo
-	echo "Käyttö: $0 <komento>"
+	echo "tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo, TV5"
 	echo
-	echo " p <regex> - listaa kaikki saatavilla olevat ohjelmat tai hae säännöllisellä lausekkeella"
-	echo " e [regex] - hae saatavilla olevien jaksojen lukumäärä säännöllisellä lausekkeella ohjelman nimen mukaan"
-	echo " v <regex> - listaa kaikki asetetut tallentimet tai hae säännöllisellä lausekkeella ohjelman nimen mukaan"
-	echo " a [regex] <ohjelma> - lisää tallennin säännöllisellä lausekkeella"
-	echo " d [regex] - poista asetetut tallentimet säännöllisellä lausekkeella ohjelman nimen mukaan"
-	echo " r [regex] <ohjelma> - tallenna kaikki nyt saatavilla olevat jaksot säännöllisellä lausekkeella ohjelman mukaan"
+	echo "Käyttö: $0 <komento> <parametrit>"
 	echo
-	echo "Suoritus ilman parametrejä tallentaa kaikki saatavilla olevat asetettujen tallentimien mukaiset jaksot"
+	echo " p <regex>           - listaa saatavilla olevat ohjelmat (tai hae lausekkeella)"
+	echo " e [regex]           - hae saatavilla olevien jaksojen määrä ohjelmittain"
+	echo " v <regex>           - listaa asetetut tallentimet (tai hae lausekkeella)"
+	echo " a [regex] <ohjelma> - lisää tallennin hakulausekkeella"
+	echo " d [regex]           - poista hakulauseketta vastaavat tallentimet"
+	echo " r [regex] <ohjelma> - tallenna saatavilla olevat jaksot hakulausekkeella"
+	echo " i		   - komentotulkkitila (lopeta komennolla \"q\")"
+	echo
+	echo "Suoritus ilman parametrejä tallentaa kaikki (komennolla \"a\") pyydetyt jaksot"
 	;;
 esac
