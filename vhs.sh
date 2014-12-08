@@ -296,6 +296,7 @@ function tv5-episodes {
 # ohjelmalistaus ladataan verkosta vain kerran ja tallennetaan ajokohtaiseen välimuistitiedostoon
 function sorted-programmes {
 	cat "${tmp}/programmes.txt" 2>/dev/null && return 0
+	[ -d "${tmp}" ] || return 1
 	( areena-programmes; ruutu-programmes; katsomo-programmes; tv5-programmes ) |\
 	LC_ALL=UTF-8 sort -f -u -t ' ' -k 3 |\
 	tee "${tmp}/programmes.txt"
