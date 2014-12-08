@@ -581,6 +581,93 @@ function recording-worker {
 
 
 #############
+# KOMENTOTULKKITILA
+
+function interpret {
+	case "$1" in
+	 p|prog)
+		query-sourced-programmes "$2" | while read source link title
+		 do
+			printf "%11s %s\n" "[$source]" "$title"
+		done
+		;;
+	 e|ep)
+		query-sourced-programmes "$2" | while read source link title
+		 do
+			episodes=$( query-programme-episodes "$source" "$link" | wc -l )
+			printf "%11s %s : %d jakso" "[$source]" "$title" "$episodes"
+			[ $episodes -eq 1 ] || echo -n "a"
+			echo
+		done
+		;;
+	 v|vhs)
+		echo "Aktiiviset tallentimet:"
+		echo "-----------------------"
+		for recorder in "${vhs}"/*.vhs
+		 do
+			programme="$( basename "$recorder" .vhs )"
+			[ -n "$2" ] && ! [[ "$programme" =~ $2 ]] && continue
+			if [ -s "$recorder" ]
+			 then echo "${programme} (\'$( head -n 1 <"$recorder" )\')"
+			 else echo "${programme}"
+			fi
+		done
+		;;
+	 a|add)
+		regex="$2"
+	 	if [ -n "$3" ]
+		 then programme="$3"
+		 else 
+			programme="$( query-programmes "$regex" | head -n 1 )"
+			if [ -z "$programme" ]
+			 then programme="$regex"
+			fi
+			regex=""
+		fi
+		[ -n "$programme" ] && echo -n "$regex" > "${vhs}/${programme}.vhs" && echo "+ ${vhs}/${programme}.vhs"
+		;;
+	 d|del)
+		for recorder in "${vhs}"/*.vhs
+		 do
+			programme="$( basename "$recorder" .vhs )"
+			[[ "$programme" =~ $2 ]] && rm "${recorder}" && echo "- ${recorder}"
+		done
+		;;
+	 r|rec)
+		query-programmes "$2" | while read programme
+		 do
+			record-regex "^$( escape-regex <<<"$programme" )$" "${programme}" /dev/null && echo
+		done
+		;;
+	 i|interactive)
+		while read cmdline
+		 do
+		 	[ "$cmdline" != "q" -a "$cmdline" != "quit" ] || break
+		 	interpret $cmdline
+		done
+		;;
+	 *)
+		echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
+		echo
+		echo "tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo, TV5"
+		echo
+		echo "Käyttö: $0 <komento> <parametrit>"
+		echo
+		echo " p <regex>           - listaa saatavilla olevat ohjelmat (tai hae lausekkeella)"
+		echo " e [regex]           - hae saatavilla olevien jaksojen määrä ohjelmittain"
+		echo " v <regex>           - listaa asetetut tallentimet (tai hae lausekkeella)"
+		echo " a [regex] <ohjelma> - lisää tallennin hakulausekkeella"
+		echo " d [regex]           - poista hakulauseketta vastaavat tallentimet"
+		echo " r [regex] <ohjelma> - tallenna saatavilla olevat jaksot hakulausekkeella"
+		echo " i                   - komentotulkkitila (lopeta komennolla \"q\")"
+		echo
+		echo "Suoritus ilman parametrejä tallentaa kaikki (komennolla \"a\") pyydetyt jaksot"
+		;;
+	esac
+}
+
+
+#############
 # PÄÄOHJELMA
 
 dependencies
@@ -592,83 +679,4 @@ if [ $# -eq 0 ]
 	fi
 fi
 
-case "$1" in
- p|prog)
-	query-sourced-programmes "$2" | while read source link title
-	 do
-		printf "%11s %s\n" "[$source]" "$title"
-	done
-	;;
- e|ep)
-	query-sourced-programmes "$2" | while read source link title
-	 do
-		episodes=$( query-programme-episodes "$source" "$link" | wc -l )
-		printf "%11s %s : %d jakso" "[$source]" "$title" "$episodes"
-		[ $episodes -eq 1 ] || echo -n "a"
-		echo
-	done
-	;;
- v|vhs)
-	echo "Aktiiviset tallentimet:"
-	echo "-----------------------"
-	for recorder in "${vhs}"/*.vhs
-	 do
-		programme="$( basename "$recorder" .vhs )"
-		[ -n "$2" ] && ! [[ "$programme" =~ $2 ]] && continue
-		if [ -s "$recorder" ]
-		 then echo "${programme} (\'$( head -n 1 <"$recorder" )\')"
-		 else echo "${programme}"
-		fi
-	done
-	;;
- a|add)
-	regex="$2"
- 	if [ -n "$3" ]
-	 then programme="$3"
-	 else 
-		programme="$( query-programmes "$regex" | head -n 1 )"
-		if [ -z "$programme" ]
-		 then programme="$regex"
-		fi
-		regex=""
-	fi
-	[ -n "$programme" ] && echo -n "$regex" > "${vhs}/${programme}.vhs" && echo "+ ${vhs}/${programme}.vhs"
-	;;
- d|del)
-	for recorder in "${vhs}"/*.vhs
-	 do
-		programme="$( basename "$recorder" .vhs )"
-		[[ "$programme" =~ $2 ]] && rm "${recorder}" && echo "- ${recorder}"
-	done
-	;;
- r|rec)
-	query-programmes "$2" | while read programme
-	 do
-		record-regex "^$( escape-regex <<<"$programme" )$" "${programme}" /dev/null && echo
-	done
-	;;
- i|interactive)
-	while read cmdline
-	 do
-	 	[ "$cmdline" != "q" -a "$cmdline" != "quit" ] || break
-	 	$0 $cmdline
-	done
-	;;
- *)
-	echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
-	echo
-	echo "tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo, TV5"
-	echo
-	echo "Käyttö: $0 <komento> <parametrit>"
-	echo
-	echo " p <regex>           - listaa saatavilla olevat ohjelmat (tai hae lausekkeella)"
-	echo " e [regex]           - hae saatavilla olevien jaksojen määrä ohjelmittain"
-	echo " v <regex>           - listaa asetetut tallentimet (tai hae lausekkeella)"
-	echo " a [regex] <ohjelma> - lisää tallennin hakulausekkeella"
-	echo " d [regex]           - poista hakulauseketta vastaavat tallentimet"
-	echo " r [regex] <ohjelma> - tallenna saatavilla olevat jaksot hakulausekkeella"
-	echo " i		   - komentotulkkitila (lopeta komennolla \"q\")"
-	echo
-	echo "Suoritus ilman parametrejä tallentaa kaikki (komennolla \"a\") pyydetyt jaksot"
-	;;
-esac
+interpret "$@"
