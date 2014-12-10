@@ -17,6 +17,9 @@ fine="${HOME}/Movies/tunes"
 # tekstitykset haetaan tällä kielellä
 sublang="fin"
 
+# automaattitallentajien tiedostopääte
+vhsext=".txt"
+
 # käyttäjätunnisteet, bash-liput
 OSX_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:31.0) Gecko/20100101 Thunderbird/31.1.0 Lightning/3.3"
 iOS_agent="Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25"
@@ -269,7 +272,7 @@ function areena-worker {
 		# aseta radio-ohjelman jakson nimi raidan nimeksi
 		title="$( sed -n '/title:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
 		# etsi sopiva AAC-koodekki ja aseta mp3-ääni koodattavaksi aac-muotoon
-		if [ -n "$( ffmprg -codecs 2>/dev/null |grep libfaac )" ]; then audio_recode="-acodec libfaac"
+		if [ -n "$( ffmpeg -codecs 2>/dev/null |grep libfaac )" ]; then audio_recode="-acodec libfaac"
 		elif [ -n "$( ffmpeg -codecs 2>/dev/null |grep libfdk_aac )" ]; then audio_recode="-acodec libfdk_aac"
 		elif [ -n "$( ffmpeg -codecs 2>/dev/null |grep libvo_aacenc )" ]; then audio_recode="-acodec libvo_aacenc"
 		else echo "* FFmpeg-yhteensopivaa AAC-koodekkia (libfaac/libfdk_aac/libvo_aacenc) ei löydy" >&2; exit 2;
@@ -283,7 +286,7 @@ function areena-worker {
 	# yritetään tulkita sanallisesti ilmaistu kauden numero
 	[ -n "$snno" ] || snno="$( season-number <<<"$desc" )"
 
-	# suoritetaan .vhs-tallentimessa annettu mahdollinen sarjakohtainen parsimiskoodi
+	# suoritetaan tallentimessa annettu mahdollinen sarjakohtainen parsimiskoodi
 	. $custom_parser || return 100
 	echo
 
@@ -492,14 +495,12 @@ function query-programme-episodes {
 	link="$2"
 
 	case $source in
-
 	 areena-tv) areena-episodes tv "$link" ;;
 	 areena-r) areena-episodes radio "$link" ;;
 	 ruutu) ruutu-episodes "$link" ;;
 	 katsomo) katsomo-episodes "$link" ;;
 	 tv5) tv5-episodes "$link" ;;
 	 *) echo "*** OHJELMAVIRHE: source=\"${source}\" ***" >&2; exit -1 ;;
-
 	# suodatetaan pois useaan kertaan esiintyvät jakson linkit
 	esac | awk '!x[$0]++'
 }
@@ -539,23 +540,20 @@ function record-regex {
 			# - muuten annetaan tv-sarjakohtaisen koodin päättää
 			[ -f "$donefile" ] && ! [ -s "$donefile" ] && continue
 
+			touch "$donefile"
 			# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
-			if unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
-			 then
-				touch "$donefile"
-				echo "[${clipid}]"
-			 else case $? in
-				 1) echo "(${clipid}: GPAC-VIRHE)" ;;
-				 2) echo "(${clipid}: METATIETOVIRHE)" ;;
-				 10) echo "(${clipid}: EI SAATAVILLA)" ;;
-				 20) echo "(${clipid}: LATAUSVIRHE)" ;;
-				 100) ;; # ohitettu, ei virhettä
-				 *) echo "(${clipid}: VIRHE $?)" ;;
-				esac
-			fi
+			unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
+			case $? in
+			 0) echo "[${clipid}]" ;;
+			 1) echo "(${clipid}: GPAC-VIRHE)"; rm "$donefile" ;;
+			 2) echo "(${clipid}: METATIETOVIRHE)"; rm "$donefile" ;;
+			 10) echo "(${clipid}: EI SAATAVILLA)"; rm "$donefile" ;;
+			 20) echo "(${clipid}: LATAUSVIRHE)"; rm "$donefile" ;;
+			 100) ;; # ohitettu, ei virhettä
+			 *) echo "(${clipid}: VIRHE $?)"; rm "$donefile" ;;
+			esac
 		done | while read receps
 		 do
-			[ -n "$receps" ] || continue
 			[ -z "$neweps" ] && echo -n "${programme} " && neweps="y"
 			echo -n "$receps "
 		done
@@ -564,12 +562,12 @@ function record-regex {
 
 
 ############
-# .VHS-TALLENTAJA
+# AUTOMAATTITALLENTAJA
 
 function recording-worker {
-	for recorder in "${vhs}"/*.vhs
+	for recorder in "${vhs}"/*${vhsext}
 	 do
-		programme="$( basename "$recorder" .vhs )"
+		programme="$( basename "$recorder" ${vhsext} )"
 		regex="$( head -n 1 <"$recorder" )"
 
 		custom_parser="${tmp}/custom-parser.sh"
@@ -634,9 +632,9 @@ function interpret {
 	 v|vhs)
 		echo "Aktiiviset tallentimet:"
 		echo "-----------------------"
-		for recorder in "${vhs}"/*.vhs
+		for recorder in "${vhs}"/*${vhsext}
 		 do
-			programme="$( basename "$recorder" .vhs )"
+			programme="$( basename "$recorder" ${vhsext} )"
 			[ -n "$2" ] && ! [[ "$programme" =~ $2 ]] && continue
 			if [ -s "$recorder" ]
 			 then echo "${programme} (\'$( head -n 1 <"$recorder" )\')"
@@ -649,18 +647,18 @@ function interpret {
 	 	if [ -n "$3" ]
 		 then
 			programme="$3"
-			echo -n "$regex" > "${vhs}/${programme}.vhs" && echo "+ ${vhs}/${programme}.vhs (\'${regex}\')"
+			echo -n "$regex" > "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext} (\'${regex}\')"
 		elif [ -n "$regex" ]
 		 then
 			programme="$( query-programmes "$regex" | head -n 1 )"
 			[ -n "$programme" ] || programme="$regex"
-			touch "${vhs}/${programme}.vhs" && echo "+ ${vhs}/${programme}.vhs"
+			touch "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext}"
 		fi
 		;;
 	 d|del)
-		[ -n "$2" ] && for recorder in "${vhs}"/*.vhs
+		[ -n "$2" ] && for recorder in "${vhs}"/*${vhsext}
 		 do
-			programme="$( basename "$recorder" .vhs )"
+			programme="$( basename "$recorder" ${vhsext} )"
 			[[ "$programme" =~ $2 ]] && rm "${recorder}" && echo "- ${recorder}"
 		done
 		;;
@@ -689,11 +687,19 @@ function interpret {
 #############
 # PÄÄOHJELMA
 
+# tarkista apuohjelmien saatavuus
 dependencies
 
+# päivitä vanhojen tallentimien tiedostopäätteet tarvittaessa
+[ "$vhsext" != ".vhs" ] && for old_recorder in "${vhs}"/*.vhs
+ do mv "$old_recorder" "${old_recorder%.vhs}${vhsext}"
+done
+
+# ei argumentteja: käsittele kaikki tallentimet
+# muuten: tulkitse annettu komentorivi
 if [ $# -eq 0 ]
  then
-	if [ -n "$( echo "${vhs}"/*.vhs )" ]
+	if [ -n "$( echo "${vhs}"/*${vhsext} )" ]
 	 then recording-worker; exit $?
 	 else
 		echo "Ei asetettuja tallentimia!"
