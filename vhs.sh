@@ -540,22 +540,21 @@ function record-regex {
 			# - muuten annetaan tv-sarjakohtaisen koodin päättää
 			[ -f "$donefile" ] && ! [ -s "$donefile" ] && continue
 
-			touch "$donefile"
 			# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
 			unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
 			case $? in
-			 0) echo "[${clipid}]" ;;
-			 1) echo "(${clipid}: GPAC-VIRHE)"; rm "$donefile" ;;
-			 2) echo "(${clipid}: METATIETOVIRHE)"; rm "$donefile" ;;
-			 10) echo "(${clipid}: EI SAATAVILLA)"; rm "$donefile" ;;
-			 20) echo "(${clipid}: LATAUSVIRHE)"; rm "$donefile" ;;
+			 0) echo "[${clipid}]" touch "$donefile";;
+			 1) echo "(${clipid}: GPAC-VIRHE)" ;;
+			 2) echo "(${clipid}: METATIETOVIRHE)" ;;
+			 10) echo "(${clipid}: EI SAATAVILLA)" ;;
+			 20) echo "(${clipid}: LATAUSVIRHE)" ;;
 			 100) ;; # ohitettu, ei virhettä
-			 *) echo "(${clipid}: VIRHE $?)"; rm "$donefile" ;;
+			 *) echo "(${clipid}: VIRHE $?)" ;;
 			esac
 		done | while read receps
 		 do
-			[ -z "$neweps" ] && echo -n "${programme} " && neweps="y"
-			echo -n "$receps "
+			[ -z "$neweps" ] && echo -n "${programme}" && neweps="y"
+			echo -n " $receps"
 		done
 	done
 }
@@ -700,7 +699,11 @@ done
 if [ $# -eq 0 ]
  then
 	if [ -n "$( echo "${vhs}"/*${vhsext} )" ]
-	 then recording-worker; exit $?
+	 then
+		# älä aja automaattitallennusta, jos muita vhs.sh-prosesseja on käynnissä
+		[ -z "$( find "${vhs}" -name .vhs.\* -not -name $( basename "$tmp" ) )" ] || exit 0
+		recording-worker
+		exit $?
 	 else
 		echo "Ei asetettuja tallentimia!"
 		echo
