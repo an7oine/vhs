@@ -701,7 +701,7 @@ if [ $# -eq 0 ]
 	if [ -n "$( echo "${vhs}"/*${vhsext} )" ]
 	 then
 		# älä aja automaattitallennusta, jos muita vhs.sh-prosesseja on käynnissä
-		[ -z "$( find "${vhs}" -name .vhs.\* -not -name $( basename "$tmp" ) )" ] || exit 0
+		[ -z "$( find -L "${vhs}" -name programmes.txt )" ] || exit 0
 		recording-worker
 		exit $?
 	 else
