@@ -543,7 +543,7 @@ function record-regex {
 			# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
 			unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
 			case $? in
-			 0) echo "[${clipid}]" touch "$donefile";;
+			 0) echo "[${clipid}]"; touch "$donefile";;
 			 1) echo "(${clipid}: GPAC-VIRHE)" ;;
 			 2) echo "(${clipid}: METATIETOVIRHE)" ;;
 			 10) echo "(${clipid}: EI SAATAVILLA)" ;;
