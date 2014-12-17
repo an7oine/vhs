@@ -371,7 +371,7 @@ function katsomo-worker {
 
 	# hae jakson nimi sekä kauden ja jakson numero www.katsomo.fi-sivun kautta
 	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 )"
-	episode="$( sed -n '/<span class="hidden subtitle-hidden">/ {;n;s#^[ \t]*##;p;}' <<<"$metadata" )"
+	episode="$( sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#{;n;s#^'$'\t''*##;p;}' <<<"$metadata" )"
 	IFS=% read snno epno <<<"$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*Kausi \([0-9]*\), jakso: \([0-9]*\).*#\1%\2#p;}' <<<"$metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
