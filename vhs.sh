@@ -44,6 +44,7 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 
 function dependencies {
 	deps="$( (
+	[ "$( echo $BASH_VERSION$'\n'3.2 |sort -n |head -n1 )" = 3.2 ] || echo -n "bash-3.2 "
 	which php &>/dev/null || echo -n "php "
     which curl &>/dev/null || echo -n "curl "
     which wget &>/dev/null || echo -n "wget "
@@ -174,6 +175,9 @@ function meta-worker {
 
 	[ -n "$thumb" ] || thumb="REMOVE_ALL"
 
+	hdvideo=false
+	[ "$( ffmpeg -i "${output}.${out_ext}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] && hdvideo=true
+
 	if [ "${out_ext}" = m4v ]
 	 then
 		# anna metatiedot videotiedostolle
@@ -191,6 +195,7 @@ function meta-worker {
 --longdesc "$desc" \
 --description "$desc" \
 --artwork "$thumb" \
+--hdvideo "$hdvideo" \
 --overWrite &>/dev/null
 		 # metatiedot elokuvan mukaisesti
 		 else AtomicParsley "${output}.m4v" \
@@ -202,6 +207,7 @@ function meta-worker {
 --longdesc "$desc" \
 --description "$desc" \
 --artwork "$thumb" \
+--hdvideo "$hdvideo" \
 --overWrite &>/dev/null
 		fi
 	 else
@@ -219,6 +225,7 @@ function meta-worker {
 --longdesc "$desc" \
 --description "$desc" \
 --artwork "$thumb" \
+--hdvideo "$hdvideo" \
 --overWrite &>/dev/null
 	fi
     [ $? -eq 0 ] || return 2
@@ -324,8 +331,14 @@ function ruutu-worker {
 	programme="$2"
 	custom_parser="$3"
 
-	epid="$( curl -s -A "${OSX_agent}" "${link}" |sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' )"
-	metadata="$( curl -s -A "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" |dec-html )"
+	html_metadata="$( curl -s -A "${OSX_agent}" "${link}" | dec-html )"
+	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
+	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\) - .*/\1/p' <<<"$og_title" )"
+	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]* - .*/\1/p' <<<"$og_title" )"
+	episode="$( sed -n 's/.* - Kausi [0-9]* - Jakso [0-9]* - \(.*\)/\1/p' <<<"$og_title" )"
+
+	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
+	metadata="$( curl -s -A "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | dec-html )"
 
 	source="$( sed -n 's#.*<MediaFile .*>\(rtmp://stream.nelonen.fi.*\)</MediaFile>#\1#p' <<<"$metadata" )"
 	[ -n "$source" ] || return 10
@@ -333,10 +346,6 @@ function ruutu-worker {
 	desc="$( sed -n 's#.*<Program.*description="\([^"]*\)".*#\1#p' <<<"$metadata" )"
 	date="$( sed -n 's#.*<Program.*start_time="\([^"]*\)".*#\1:00#p' <<<"$metadata" | txtime-to-utc )"
 	agelimit="$( sed -n 's#.*<AgeLimit>\([0-9]*\)</AgeLimit>.*#\1#p' <<<"$metadata" )"
-
-	episode="$( sed -n 's#.*<Program.*program_name="\([^"]*\)".*#\1#p' <<<"$metadata" )"
-	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\)/\1/p' <<<"$episode" )"
-	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]*/\1/p' <<<"$episode" )"
 
 	thumb="$( sed -n 's#.*<Startpicture href="\(http://[^"]*\)"/>.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && wget -q -O "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
@@ -372,11 +381,11 @@ function katsomo-worker {
 	custom_parser="$3"
 
 	# hae jakson nimi sekä kauden ja jakson numero www.katsomo.fi-sivun kautta
-	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 |\
+	html_metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
-	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$metadata" )"
-	snno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Kkv][au][uo]si[: ]*\([0-9]*\).*#\1#p;}' <<<"$metadata" )"
-	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$metadata" )"
+	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
+	snno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Kkv][au][uo]si[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
+	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
 	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" |iconv -f ISO-8859-1 )"
