@@ -225,7 +225,6 @@ function meta-worker {
 --longdesc "$desc" \
 --description "$desc" \
 --artwork "$thumb" \
---hdvideo "$hdvideo" \
 --overWrite &>/dev/null
 	fi
     [ $? -eq 0 ] || return 2
