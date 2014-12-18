@@ -92,6 +92,7 @@ function txtime-to-utc {
 }
 function tv-rating {
 	read age
+	age=${age//[A-Za-z]}
 	[ -n "$age" ] || return
 	if [ $age -lt 4 ]; then echo "fi-tv|0+|100|"
 	elif [ $age -lt 9 ]; then echo "fi-tv|4+|150|"
@@ -102,6 +103,7 @@ function tv-rating {
 }
 function movie-rating {
 	read age
+	age=${age//[A-Za-z]}
 	[ -n "$age" ] || return
 	if [ $age -lt 7 ]; then echo "fi-movie|S/T|100|"
 	elif [ $age -lt 12 ]; then echo "fi-movie|K-7|200|"
@@ -370,9 +372,11 @@ function katsomo-worker {
 	custom_parser="$3"
 
 	# hae jakson nimi sekä kauden ja jakson numero www.katsomo.fi-sivun kautta
-	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 )"
-	episode="$( sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#{;n;s#^'$'\t''*##;p;}' <<<"$metadata" )"
-	IFS=% read snno epno <<<"$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*Kausi \([0-9]*\), jakso: \([0-9]*\).*#\1%\2#p;}' <<<"$metadata" )"
+	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 |\
+sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
+	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$metadata" )"
+	snno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Kkv][au][uo]si[: ]*\([0-9]*\).*#\1#p;}' <<<"$metadata" )"
+	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
 	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" |iconv -f ISO-8859-1 )"
