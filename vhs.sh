@@ -93,7 +93,7 @@ function txtime-to-utc {
 }
 function tv-rating {
 	read age
-	age=${age//[A-Za-z]}
+	age="${age//[A-Za-z]}"
 	[ -n "$age" ] || return
 	if [ $age -lt 4 ]; then echo "fi-tv|0+|100|"
 	elif [ $age -lt 9 ]; then echo "fi-tv|4+|150|"
@@ -104,7 +104,7 @@ function tv-rating {
 }
 function movie-rating {
 	read age
-	age=${age//[A-Za-z]}
+	age="${age//[A-Za-z]}"
 	[ -n "$age" ] || return
 	if [ $age -lt 7 ]; then echo "fi-movie|S/T|100|"
 	elif [ $age -lt 12 ]; then echo "fi-movie|K-7|200|"
@@ -166,6 +166,10 @@ function meta-worker {
 	# käytä samaa tarkenninta kuin lähdetiedostossa (m4v tai m4a)
 	out_ext="${input##*.}"
 
+	# tutki, onko videokuvan pystysuuntainen tarkkuus vähintään 720p ja aseta HD-videomerkintä sen mukaisesti
+	hdvideo=false
+	[ "$( ffmpeg -i "${input}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] 2>/dev/null && hdvideo=true
+	
 	# lisää tekstitykset jos ne on annettu, muutoin käytä syötettä sellaisenaan
     if [ -n "$subtitles" ]
      then MP4Box -add "${subtitles}:lang=${sublang}:hdlr=sbtl" -out "${output}.${out_ext}" "${input}" &>/dev/null
@@ -174,9 +178,6 @@ function meta-worker {
     [ $? -eq 0 ] || return 1
 
 	[ -n "$thumb" ] || thumb="REMOVE_ALL"
-
-	hdvideo=false
-	[ "$( ffmpeg -i "${output}.${out_ext}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] && hdvideo=true
 
 	if [ "${out_ext}" = m4v ]
 	 then
