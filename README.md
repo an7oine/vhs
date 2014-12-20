@@ -29,7 +29,7 @@ Skriptillä voi hakea ohjelmia ja jaksojen lukumääriä ja asettaa ajastimia s�
 Käyttövinkkejä:
 - Automaattinen ajo kerran päivässä yhdeltä yöllä (koneen päällä ollessa) onnistuu lisäämällä omaan crontab-luetteloon seuraava rivi:
 
-0 1 * * * <polku>/vhs.sh
+0 1 * * * [polku]/vhs.sh
 - Tallennettujen ohjelmien automaattinen lisääminen omaan iTunes-kirjastoon (OS X -ympäristössä) onnistuu luomalla symbolinen linkki ~/Movies/tunes seuraavasti:
 
 ln -s ~/Music/iTunes/iTunes\ Media/Lisää\ automaattisesti\ iTunesiin ~/Movies/tunes
