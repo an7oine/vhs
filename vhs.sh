@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.2
+script_version=1.2.1
 
 #######
 # ASETUKSET
@@ -42,18 +42,27 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 #######
 # ULKOISET APUOHJELMAT
 
+function check-version {
+	current_version=$1
+	minimum_version=$2
+	[ "$( echo $current_version$'\n'$minimum_version |sort -n |head -n1 )" = $minimum_version ]
+}
+
 function dependencies {
 	deps="$( (
-	[ "$( echo $BASH_VERSION$'\n'3.2 |sort -n |head -n1 )" = 3.2 ] || echo -n "bash-3.2 "
+	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
 	which php &>/dev/null || echo -n "php "
     which curl &>/dev/null || echo -n "curl "
     which wget &>/dev/null || echo -n "wget "
     which xpath &>/dev/null || echo -n "xpath "
-    which rtmpdump &>/dev/null || echo -n "rtmpdump "
     which yle-dl &>/dev/null || echo -n "yle-dl "
-    which ffmpeg &>/dev/null || echo -n "ffmpeg "
     which MP4Box &>/dev/null || echo -n "gpac "
-    which AtomicParsley &>/dev/null || echo -n "AtomicParsley "
+    ( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 |sed -n 's/^RTMPDump v//p' ) 2.4 ) \
+     || echo -n "rtmpdump-2.4 "
+    ( which ffmpeg &>/dev/null && check-version $( ffmpeg -version |awk '/^ffmpeg version /{print $3}' ) 2.4.2 ) \
+     || echo -n "ffmpeg-2.4.2 "
+    ( which AtomicParsley &>/dev/null && check-version $( AtomicParsley -version |awk '{print $3}' ) 0.9.5 ) \
+     || echo -n "AtomicParsley-0.9.5 "
 	) )"
 	[ -z "$deps" ] && return 0
 	echo "* Puuttuvat apuohjelmat: $deps" >&2
@@ -598,14 +607,7 @@ function recording-worker {
 #############
 # OPASTUS
 
-function print_help {
-	echo
-	echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
-	echo
-	echo "- tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo ja TV5"
-	echo
-	echo "Käyttö: $0 <komento> <parametrit>"
-	echo
+function print-cmds {
 	echo " p <regex>           - listaa saatavilla olevat ohjelmat <tai hae lausekkeella>"
 	echo " e [regex]           - hae saatavilla olevien jaksojen määrä ohjelmittain"
 	echo " v <regex>           - listaa asetetut tallentimet <tai hae lausekkeella>"
@@ -614,6 +616,17 @@ function print_help {
 	echo " r [regex] <ohjelma> - tallenna jaksot hakulausekkeella <nimetystä ohjelmasta>"
 	echo " i                   - komentotulkkitila (suorita peräkkäin useita komentoja)"
 	echo " q                   - poistu komentotulkkitilasta"
+}
+
+function print-help {
+	echo
+	echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
+	echo
+	echo "- tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo ja TV5"
+	echo
+	echo "Käyttö: $0 <komento> <parametrit>"
+	echo
+	print-cmds
 	echo
 	echo "- parametrit [hakasuluissa] ovat pakollisia, <väkäsuluissa> valinnaisia"
 	echo "Suoritus ilman parametrejä toteuttaa komennolla \"a\" asetetut tallennukset"
@@ -681,16 +694,17 @@ function interpret {
 		done
 		;;
 	 i|interactive)
-		echo; echo -n "vhs.sh> "
+	 	print-cmds
+		echo -n $'\n'"vhs.sh> "
 		while read cmdline
 		 do
 		 	[ "$cmdline" != "q" -a "$cmdline" != "quit" ] || break
 		 	interpret $cmdline
-			echo; echo -n "vhs.sh> "
+			echo -n $'\n'"vhs.sh> "
 		done
 		;;
 	 *)
-		print_help
+		print-help
 		;;
 	esac
 }
@@ -702,7 +716,7 @@ function interpret {
 # tarkista apuohjelmien saatavuus
 dependencies
 
-# päivitä vanhojen tallentimien tiedostopäätteet tarvittaessa
+# vaihda vanhojen tallentimien tiedostopäätteet (.vhs) tarvittaessa
 [ "$vhsext" != ".vhs" ] && for old_recorder in "${vhs}"/*.vhs
  do mv "$old_recorder" "${old_recorder%.vhs}${vhsext}"
 done
@@ -720,7 +734,7 @@ if [ $# -eq 0 ]
 	 else
 		echo "Ei asetettuja tallentimia!"
 		echo
-		print_help
+		print-help
 	fi
  else
 	interpret "$@"
