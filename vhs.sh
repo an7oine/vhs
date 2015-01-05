@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.2.1
+script_version=1.3
 
 #######
 # ASETUKSET
