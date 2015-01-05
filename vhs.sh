@@ -11,8 +11,11 @@ lib="${HOME}/.vhs"
 # tallentimet (ja väliaikaistiedostot) sijoitetaan tänne (luodaan ellei olemassa)
 vhs="${HOME}/Movies/vhs"
 
-# valmiit videotiedostot sijoitetaan tänne jos olemassa, muutoin 'vhs'-hakemistoon ohjelmittain järjestettynä
+# skripti joka ajetaan valmiin nauhoitetun tiedoston loppusijoittamiseksi, jos olemassa
+finish="${lib}/finish.sh"
+# mikäli finish-skriptiä ei löydy, valmiit tiedostot sijoitetaan tänne, jos olemassa
 fine="${HOME}/Movies/tunes"
+# valmiit sijoitetaan muutoin 'vhs'-hakemistoon ohjelmittain järjestettynä
 
 # tekstitykset haetaan tällä kielellä
 sublang="fin"
@@ -239,9 +242,11 @@ function meta-worker {
 	fi
     [ $? -eq 0 ] || return 2
 
-	# poista lähtötiedostot ja siirrä tulos "fine"- tai ohjelmakohtaiseen hakemistoon
+	# poista lähtötiedostot ja aja finish-skripti tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
 	rm "${input}" "${subtitles}" &>/dev/null
-    if [ -d "${fine}" ]
+	if [ -x "${finish}" ]
+	 then . "${finish}" "${output}.${out_ext}"
+    elif [ -d "${fine}" ]
 	 then mv "${output}.${out_ext}" "${fine}/"
 	 else mkdir -p "${vhs}/${programme}/" && mv "${output}.${out_ext}" "${vhs}/${programme}/"
 	fi
