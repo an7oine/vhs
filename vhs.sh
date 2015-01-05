@@ -93,15 +93,28 @@ function ttml-to-srt {
 #; s#\([0-9:]\{8\}\)[.]\([0-9]\{3\}\)#\1,\2#g; s#<br/>#\
 #g'
 }
-function txtime-to-utc {
+function txtime-to-epoch {
 	read txtime
 	[ -n "$txtime" ] || return
 	if [ "$( uname )" = "Darwin" ]
-	 then # Mac OS X
-		date -j -u -r "$( date -j -f '%d.%m.%Y %T' "${txtime}" "+%s" )" "+%Y-%m-%dT%H:%M:%SZ"
-	 else # Linux / Cygwin
-		txtime="$( sed 's#\(..\)[.]\(..\)[.]\(....\)#\3-\2-\1#' <<<"$txtime" )"
-		date -u -d "@$( date -d "${txtime}" "+%s" )" "+%Y-%m-%dT%H:%M:%SZ"
+	 then date -j -f '%d.%m.%Y %T' "${txtime}" "+%s" # Mac OS X
+	 else date -d "$( sed 's#\(..\)[.]\(..\)[.]\(....\)#\3-\2-\1#' <<<"$txtime" )" "+%s" # Linux / Cygwin
+	fi
+}
+function epoch-to-utc {
+	read epoch
+	[ -n "$epoch" ] || return
+	if [ "$( uname )" = "Darwin" ]
+	 then date -j -u -r "$epoch" "+%Y-%m-%dT%H:%M:%SZ" # Mac OS X
+	 else date -u -d "@$epoch" "+%Y-%m-%dT%H:%M:%SZ" # Linux / Cygwin
+	fi
+}
+function epoch-to-touch {
+	read epoch
+	[ -n "$epoch" ] || return
+	if [ "$( uname )" = "Darwin" ]
+	 then date -j -r "$epoch" "+%Y%m%d%H%M.%S" # Mac OS X
+	 else date -d "@$epoch" "+%Y%m%d%H%M.%S" # Linux / Cygwin
 	fi
 }
 function tv-rating {
@@ -203,7 +216,7 @@ function meta-worker {
 --TVEpisode "$episode" \
 --TVEpisodeNum "$epno" \
 --TVSeasonNum "$snno" \
---year "$date" \
+--year "$( epoch-to-utc <<<"$epoch" )" \
 --purchaseDate "timestamp" \
 --Rating "$( tv-rating <<<"$agelimit" )" \
 --longdesc "$desc" \
@@ -215,7 +228,7 @@ function meta-worker {
 		 else AtomicParsley "${output}.m4v" \
 --stik value=9 \
 --title "$programme" \
---year "$date" \
+--year "$( epoch-to-utc <<<"$epoch" )" \
 --purchaseDate "timestamp" \
 --Rating "$( movie-rating <<<"$agelimit" )" \
 --longdesc "$desc" \
@@ -234,7 +247,7 @@ function meta-worker {
 --albumArtist "$albumArtist" \
 --tracknum "$epno" \
 --disk "$snno" \
---year "$date" \
+--year "$( epoch-to-utc <<<"$epoch" )" \
 --purchaseDate "timestamp" \
 --longdesc "$desc" \
 --description "$desc" \
@@ -242,6 +255,9 @@ function meta-worker {
 --overWrite &>/dev/null
 	fi
     [ $? -eq 0 ] || return 2
+    
+    # aseta julkaisuajankohta tulostiedoston aikaleimaksi
+    touch -t "$( epoch-to-touch <<<"$epoch" )" "${output}.${out_ext}"
 
 	# poista lähtötiedostot ja aja finish-skripti tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
 	rm "${input}" "${subtitles}" &>/dev/null
@@ -291,7 +307,7 @@ function areena-worker {
 	desc="$( sed -n 's/title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" |sed 's/^[ \t]*//' )"
 	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
 
-	date="$( sed -n '/broadcasted:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" | sed 's#\([0-9]*\)/\([0-9]*\)/\([0-9]*\)#\3.\2.\1#' | txtime-to-utc )"
+	epoch="$( sed -n '/broadcasted:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" | sed 's#\([0-9]*\)/\([0-9]*\)/\([0-9]*\)#\3.\2.\1#' | txtime-to-epoch )"
 	agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*<div id="areena_player" class="wrapper main player"  style="background-image: url(\(http://.*.jpg\));">.*#\1#p' <<<"$metadata" )"
@@ -371,7 +387,7 @@ function ruutu-worker {
 	[ -n "$source" ] || return 10
 
 	desc="$( sed -n 's#.*<Program.*description="\([^"]*\)".*#\1#p' <<<"$metadata" )"
-	date="$( sed -n 's#.*<Program.*start_time="\([^"]*\)".*#\1:00#p' <<<"$metadata" | txtime-to-utc )"
+	epoch="$( sed -n 's#.*<Program.*start_time="\([^"]*\)".*#\1:00#p' <<<"$metadata" | txtime-to-epoch )"
 	agelimit="$( sed -n 's#.*<AgeLimit>\([0-9]*\)</AgeLimit>.*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*<Startpicture href="\(http://[^"]*\)"/>.*#\1#p' <<<"$metadata" )"
@@ -427,8 +443,8 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
 	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" |iconv -f ISO-8859-1 )"
 
-	desc="$( xpath //Playback/Description <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' |dec-html )"
-	date="$( xpath //Playback/TxTime <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | txtime-to-utc )"
+	desc="$( xpath //Playback/Description <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | dec-html )"
+	epoch="$( xpath //Playback/TxTime <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | txtime-to-epoch )"
 	agelimit="$( xpath //Playback/AgeRating <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' )"
 
 	thumb="$( xpath //Playback/ImageUrl <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' |dec-html )"
