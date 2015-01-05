@@ -256,16 +256,19 @@ function meta-worker {
 	fi
     [ $? -eq 0 ] || return 2
     
-    # aseta julkaisuajankohta tulostiedoston aikaleimaksi
-    touch -t "$( epoch-to-touch <<<"$epoch" )" "${output}.${out_ext}"
+	# aseta julkaisuajankohta tulostiedoston aikaleimaksi
+	touch -t "$( epoch-to-touch <<<"$epoch" )" "${output}.${out_ext}"
 
-	# poista lähtötiedostot ja aja finish-skripti tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
+	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
 	rm "${input}" "${subtitles}" &>/dev/null
 	if [ -x "${finish}" ]
 	 then . "${finish}" "${output}.${out_ext}"
-    elif [ -d "${fine}" ]
-	 then mv "${output}.${out_ext}" "${fine}/"
-	 else mkdir -p "${vhs}/${programme}/" && mv "${output}.${out_ext}" "${vhs}/${programme}/"
+	fi
+	if [ -f "${output}.${out_ext}" ]
+	 then if [ -d "${fine}" ]
+		 then mv "${output}.${out_ext}" "${fine}/"
+		 else mkdir -p "${vhs}/${programme}/" && mv "${output}.${out_ext}" "${vhs}/${programme}/"
+		fi
 	fi
 }
 
