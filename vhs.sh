@@ -49,7 +49,7 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 function check-version {
 	current_version=$1
 	minimum_version=$2
-	[ "$( echo $current_version$'\n'$minimum_version |sort -n |head -n1 )" = $minimum_version ]
+	[ "$( echo $current_version$'\n'$minimum_version |sort -g |head -n1 )" = $minimum_version ]
 }
 
 function dependencies {
