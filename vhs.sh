@@ -26,6 +26,7 @@ vhsext=".txt"
 # käyttäjätunnisteet, bash-liput
 OSX_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:31.0) Gecko/20100101 Thunderbird/31.1.0 Lightning/3.3"
 iOS_agent="Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25"
+shopt -s extglob
 shopt -s nullglob
 shopt -s nocasematch
 
@@ -504,7 +505,7 @@ function query-programmes {
 
 	sorted-programmes | while read source link title
 	 do
-		[ -n "$regex" ] && ! [[ "$title" =~ $regex ]] && continue
+		[ -n "$regex" ] && ! [[ "${title%% (+([[:digit:]]))}" =~ $regex ]] && continue
 		echo "$title"
 	done
 }
@@ -513,7 +514,7 @@ function query-sourced-programmes {
 
 	sorted-programmes | while read source link title
 	 do
-		[ -n "$regex" ] && ! [[ "$title" =~ $regex ]] && continue
+		[ -n "$regex" ] && ! [[ "${title%% (+([[:digit:]]))}" =~ $regex ]] && continue
 		echo "$source" "$link" "$title"
 	done
 }
@@ -591,7 +592,7 @@ function record-regex {
 # AUTOMAATTITALLENTAJA
 
 function recording-worker {
-	for recorder in "${vhs}"/*${vhsext}
+	for recorder in "${vhs}"/*"${vhsext}"
 	 do
 		programme="$( basename "$recorder" ${vhsext} )"
 		regex="$( head -n 1 <"$recorder" )"
@@ -599,7 +600,7 @@ function recording-worker {
 		custom_parser="${tmp}/custom-parser.sh"
 		sed -n '2,$ p' <"$recorder" >"$custom_parser"
 
-		[ -z "${regex}" ] && regex="${programme}"'[ (SK0-9)]*'
+		[ -z "${regex}" ] && regex="^$( escape-regex <<<"$programme" )$"
 
 		record-regex "$regex" "$programme" "$custom_parser" | tee "${tmp}/record-output.txt"
 
@@ -662,9 +663,9 @@ function interpret {
 	 v|vhs)
 		echo "Aktiiviset tallentimet:"
 		echo "-----------------------"
-		for recorder in "${vhs}"/*${vhsext}
+		for recorder in "${vhs}"/*"${vhsext}"
 		 do
-			programme="$( basename "$recorder" ${vhsext} )"
+			programme="$( basename "${recorder}" "${vhsext}" )"
 			[ -n "$2" ] && ! [[ "$programme" =~ $2 ]] && continue
 			if [ -s "$recorder" ]
 			 then echo "${programme} (\'$( head -n 1 <"$recorder" )\')"
@@ -677,25 +678,28 @@ function interpret {
 	 	if [ -n "$3" ]
 		 then
 			programme="$3"
-			echo -n "$regex" > "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext} (\'${regex}\')"
+			echo "$regex" > "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext} (\'${regex}\')"
 		elif [ -n "$regex" ]
 		 then
-			programme="$( query-programmes "$regex" | head -n 1 )"
-			[ -n "$programme" ] || programme="$regex"
-			touch "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext}"
+			query-programmes "$regex" | while read programme_withrating
+			 do
+				recorder="${vhs}/${programme_withrating%% (+([[:digit:]]))}${vhsext}"
+				touch "${recorder}" && echo "+ ${recorder}"
+			done
 		fi
 		;;
 	 d|del)
-		[ -n "$2" ] && for recorder in "${vhs}"/*${vhsext}
+		[ -n "$2" ] && for recorder in "${vhs}"/*"${vhsext}"
 		 do
-			programme="$( basename "$recorder" ${vhsext} )"
+			programme="$( basename "${recorder}" "${vhsext}" )"
 			[[ "$programme" =~ $2 ]] && rm "${recorder}" && echo "- ${recorder}"
 		done
 		;;
 	 r|rec)
-		[ -n "$2" ] && query-programmes "$2" | while read programme
+		[ -n "$2" ] && query-programmes "$2" | while read programme_withrating
 		 do
-			record-regex "^$( escape-regex <<<"$programme" )$" "${programme}" /dev/null && echo
+			programme="${programme_withrating%% (+([[:digit:]]))}"
+			record-regex "^$( escape-regex <<<"${programme}" )$" "${programme}" /dev/null && echo
 		done
 		;;
 	 i|interactive)
