@@ -271,6 +271,14 @@ function areena-episodes {
 	sed -n '/rss/ d; s#.*<link>\(.*\)</link>.*#\1#p'
 	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${type}/${link}"
 }
+function areena-episode-string {
+	link="$1"
+	metadata="$( curl -s -A "${OSX_agent}" "${link}" )"
+	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
+	desc="$( sed -n 's/.*title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" )"
+	title="$( sed -n 's/.*title: *'\''\([^'\'']*\) *'\'',.*/\1/p' <<<"$metadata" )"
+	echo "Osa ${epno}: ${title} ${desc}"
+}
 function areena-worker {
     link="$1"
     programme="$2"
@@ -341,6 +349,10 @@ function ruutu-episodes {
 	sed '/<div class="ruutuplus">/ { n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;d; }' |\
 	sed -n 's#.*<a href="\(/ohjelmat/'"${link}"'/[^?"]*\)">.*#http://www.ruutu.fi\1#p'
 }
+function ruutu-episode-string {
+	link="$1"
+	curl -s -A "${OSX_agent}" "${link}" | dec-html | sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p'
+}
 function ruutu-worker {
 	link="$1"
 	programme="$2"
@@ -389,6 +401,16 @@ function katsomo-episodes {
 	curl -s -A "${OSX_agent}" "http://www.katsomo.fi/?treeId=${link}" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="\(/?progId=[^"]*\)".*class="play-link".*>.*#http://m.katsomo.fi\1#p'
+}
+function katsomo-episode-string {
+	link="$1"
+	html_metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 |\
+sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
+	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" |iconv -f ISO-8859-1 )"
+	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
+	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
+	desc="$( xpath //Playback/Description <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' |dec-html )"
+	echo "Osa ${epno}: ${episode} ${desc}"
 }
 function katsomo-worker {
 	link="$1"
@@ -450,6 +472,13 @@ function tv5-episodes {
 	while read eplink
 	 do [ -n "$( curl -s "$eplink" | sed -n '/jwplayer('\''video'\'').setup/ p' )" ] && echo "$eplink"
 	done
+}
+function tv5-episode-string {
+	link="$1"
+	metadata="$( curl -s -A "${OSX_agent}" "${link}" | sed -n '/<meta.*\/>/ p; /jwplayer('\''video'\'').setup/ p' )"
+	epno="$( sed -n 's#.*<meta property="og:title" content=".*, osa \([0-9]*\)".*#\1#p' <<<"$metadata" )"
+	desc="$( sed -n 's#.*<meta property="og:description" content="\([^"]*\)".*#\1#p' <<<"$metadata" )"
+	echo "Osa ${epno}: ${desc}"
 }
 function tv5-worker {
 	link="$1"
@@ -532,6 +561,17 @@ function query-programme-episodes {
 	# suodatetaan pois useaan kertaan esiintyvät jakson linkit
 	esac | awk '!x[$0]++'
 }
+function unified-episode-string {
+	link="$1"
+
+	case "$( sed 's#http://\([^/]*\).*#\1#' <<<"$link" )" in
+	 areena.yle.fi) areena-episode-string "$@" ;;
+	 www.ruutu.fi) ruutu-episode-string "$@" ;;
+	 m.katsomo.fi) katsomo-episode-string "$@" ;;
+	 tv5.fi) tv5-episode-string "$@" ;;
+	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
+	esac
+}
 function unified-worker {
 	link="$1"
 
@@ -541,6 +581,37 @@ function unified-worker {
 	 m.katsomo.fi) katsomo-worker "$@" ;;
 	 tv5.fi) tv5-worker "$@" ;;
 	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
+	esac
+}
+
+
+# JAKSON TALLENNUS, VIRHEIDEN KÄSITTELY JA TIETOKANNAN YLLÄPITO
+function record-episode {
+	programme="$1"
+	eplink="$2"
+	custom_parser="$3"
+
+	mkdir -p "${lib}/${programme}"
+
+	# ota linkin loppuosa jakson tunnisteeksi
+	clipid="${eplink##*[/=]}"
+	donefile="${lib}/${programme}/${clipid}.done"
+
+	# tutki onko jokin tätä tunnistetta vastaava jakso tallennettu jo aiemmin:
+	# - ohita, jos aiemmalla tallenteella ei ole tarkempaa yksilöintitietoa;
+	# - muuten annetaan tv-sarjakohtaisen koodin päättää
+	[ -f "$donefile" ] && ! [ -s "$donefile" ] && continue
+
+	# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
+	unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
+	case $? in
+	 0) echo "[${clipid}]"; touch "$donefile";;
+	 1) echo "(${clipid}: GPAC-VIRHE)" ;;
+	 2) echo "(${clipid}: METATIETOVIRHE)" ;;
+	 10) echo "(${clipid}: EI SAATAVILLA)" ;;
+	 20) echo "(${clipid}: LATAUSVIRHE)" ;;
+	 100) ;; # ohitettu, ei virhettä
+	 *) echo "(${clipid}: VIRHE $?)" ;;
 	esac
 }
 
@@ -557,28 +628,7 @@ function record-regex {
 	 do
 		query-programme-episodes "$source" "$link" | while read eplink
 		 do
-			mkdir -p "${lib}/${programme}"
-
-			# ota linkin loppuosa jakson tunnisteeksi 
-			clipid="${eplink##*[/=]}"
-			donefile="${lib}/${programme}/${clipid}.done"
-
-			# tutki onko jokin tätä tunnistetta vastaava jakso tallennettu jo aiemmin:
-			# - ohita, jos aiemmalla tallenteella ei ole tarkempaa yksilöintitietoa;
-			# - muuten annetaan tv-sarjakohtaisen koodin päättää
-			[ -f "$donefile" ] && ! [ -s "$donefile" ] && continue
-
-			# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
-			unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
-			case $? in
-			 0) echo "[${clipid}]"; touch "$donefile";;
-			 1) echo "(${clipid}: GPAC-VIRHE)" ;;
-			 2) echo "(${clipid}: METATIETOVIRHE)" ;;
-			 10) echo "(${clipid}: EI SAATAVILLA)" ;;
-			 20) echo "(${clipid}: LATAUSVIRHE)" ;;
-			 100) ;; # ohitettu, ei virhettä
-			 *) echo "(${clipid}: VIRHE $?)" ;;
-			esac
+			record-episode "$programme" "$eplink" "$custom_parser"
 		done | while read receps
 		 do
 			[ -z "$neweps" ] && echo -n "${programme}" && neweps="y"
@@ -616,10 +666,12 @@ function recording-worker {
 function print-cmds {
 	echo " p <regex>           - listaa saatavilla olevat ohjelmat <tai hae lausekkeella>"
 	echo " e [regex]           - hae saatavilla olevien jaksojen määrä ohjelmittain"
+	echo " l [regex]           - listaa saatavilla olevat jaksot ohjelmittain"
+	echo " r [regex]           - tallenna kaikki jaksot hakulausekkeella ohjelman mukaan"
+	echo " s [regex]           - valitse ja tallenna jaksoja hakulausekkeella"
 	echo " v <regex>           - listaa asetetut tallentimet <tai hae lausekkeella>"
-	echo " a [regex] <ohjelma> - aseta hakutallennin lausekkeella <nimetylle ohjelmalle>"
+	echo " a [regex] <ohjelma> - lisää tallennin hakulausekkeella <nimetylle ohjelmalle>"
 	echo " d [regex]           - poista kaikki hakulauseketta vastaavat tallentimet"
-	echo " r [regex] <ohjelma> - tallenna jaksot hakulausekkeella <nimetystä ohjelmasta>"
 	echo " i                   - komentotulkkitila (suorita peräkkäin useita komentoja)"
 	echo " q                   - poistu komentotulkkitilasta"
 }
@@ -648,17 +700,57 @@ function interpret {
 	 p|prog)
 		query-sourced-programmes "$2" | while read source link title
 		 do
-			printf "%11s %s\n" "[$source]" "$title"
+			printf "%11s %s\n" "[$source]" "${title%% (+([[:digit:]]))}"
 		done
 		;;
 	 e|ep)
 		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
 		 do
 			episodes="$( query-programme-episodes "$source" "$link" | wc -l )"
-			printf "%11s %s : %d jakso" "[$source]" "$title" "$episodes"
+			printf "%11s %s : %d jakso" "[$source]" "${title%% (+([[:digit:]]))}" "$episodes"
 			[ $episodes -eq 1 ] || echo -n "a"
 			echo
 		done
+		;;
+	 l|list)
+		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
+		 do
+			echo "${title%% (+([[:digit:]]))}"
+			query-programme-episodes "$source" "$link" | while read eplink
+			 do unified-episode-string "${eplink}"
+			done | cat -n
+		done
+		;;
+	 r|rec)
+		[ -n "$2" ] && query-programmes "$2" | while read programme_withrating
+		 do
+			programme="${programme_withrating%% (+([[:digit:]]))}"
+			record-regex "^$( escape-regex <<<"${programme}" )$" "${programme}" /dev/null && echo
+		done
+		;;
+	 s|select)
+		exec 3<&0
+		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
+		 do
+			programme="${title%% (+([[:digit:]]))}"
+			echo "${programme}"
+			query-programme-episodes "$source" "$link" | tee "${tmp}/episodes.txt" | while read eplink
+			 do unified-episode-string "${eplink}"
+			done | cat -n
+
+			read -ep"Valitse tallennettavat jaksot: " indices <&3
+			history -s $indices
+			indices="$( eval echo "$( sed 's/\([0-9]*\)-\([0-9]*\)/{\1..\2}/g' <<<"${indices}" )" )"
+
+			for index in $indices
+			 do
+				record-episode "$programme" "$( sed -n "${index} p" "${tmp}/episodes.txt" )" /dev/null
+			done | while read receps
+			 do [ -n "$receps" ] && echo -n "$receps "
+			done
+			echo
+		done
+		exec 3<&-
 		;;
 	 v|vhs)
 		echo "Aktiiviset tallentimet:"
@@ -695,21 +787,13 @@ function interpret {
 			[[ "$programme" =~ $2 ]] && rm "${recorder}" && echo "- ${recorder}"
 		done
 		;;
-	 r|rec)
-		[ -n "$2" ] && query-programmes "$2" | while read programme_withrating
-		 do
-			programme="${programme_withrating%% (+([[:digit:]]))}"
-			record-regex "^$( escape-regex <<<"${programme}" )$" "${programme}" /dev/null && echo
-		done
-		;;
 	 i|interactive)
 	 	print-cmds
-		echo -n $'\n'"vhs.sh> "
-		while read cmdline
+		while read -ep"vhs.sh> " cmdline
 		 do
+			history -s $cmdline
 		 	[ "$cmdline" != "q" -a "$cmdline" != "quit" ] || break
 		 	interpret $cmdline
-			echo -n $'\n'"vhs.sh> "
 		done
 		;;
 	 *)
