@@ -84,7 +84,7 @@ function dependencies {
 
 function remove-rating {
 	read programme_withrating
-	echo ${programme_withrating%% (+([SK[:digit:]]))}"
+	echo "${programme_withrating%% (+([SK[:digit:]]))}"
 }
 function escape-regex {
 	sed 's/[(){}\[^]/\\&/g; s/]/\\&/g'
