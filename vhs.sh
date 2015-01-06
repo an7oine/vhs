@@ -232,6 +232,7 @@ function meta-worker {
 --description "$desc" \
 --artwork "$thumb" \
 --hdvideo "$hdvideo" \
+--comment "$comment" \
 --overWrite &>/dev/null
 		 # metatiedot elokuvan mukaisesti
 		 else AtomicParsley "${output}.m4v" \
@@ -244,6 +245,7 @@ function meta-worker {
 --description "$desc" \
 --artwork "$thumb" \
 --hdvideo "$hdvideo" \
+--comment "$comment" \
 --overWrite &>/dev/null
 		fi
 	 else
@@ -261,6 +263,7 @@ function meta-worker {
 --longdesc "$desc" \
 --description "$desc" \
 --artwork "$thumb" \
+--comment "$comment" \
 --overWrite &>/dev/null
 	fi
     [ $? -eq 0 ] || return 2
