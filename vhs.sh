@@ -563,18 +563,10 @@ function tv5-worker {
 function sorted-programmes {
 	cat "${tmp}/programmes.txt" 2>/dev/null && return 0
 	[ -d "${tmp}" ] || return 1
+
 	( areena-programmes; ruutu-programmes; katsomo-programmes; tv5-programmes ) |\
 	LC_ALL=UTF-8 sort -f -u -t ' ' -k 3 |\
 	tee "${tmp}/programmes.txt"
-}
-function query-programmes {
-	regex="$1"
-
-	sorted-programmes | while read source link title
-	 do
-		[ -n "$regex" ] && ! [[ "$( remove-rating <<<"$title" )" =~ $regex ]] && continue
-		echo "$title"
-	done
 }
 function query-sourced-programmes {
     regex="$1"
@@ -589,6 +581,10 @@ function query-programme-episodes {
 	source="$1"
 	link="$2"
 
+	cache="${tmp}/${source}-${link##*[/=]}-episodes.txt"
+	cat "${cache}" 2>/dev/null && return 0
+	[ -d "${tmp}" ] || return 1
+
 	case $source in
 	 areena-tv) areena-episodes tv "$link" ;;
 	 areena-r) areena-episodes radio "$link" ;;
@@ -597,7 +593,7 @@ function query-programme-episodes {
 	 tv5) tv5-episodes "$link" ;;
 	 *) echo "*** OHJELMAVIRHE: source=\"${source}\" ***" >&2; exit -1 ;;
 	# suodatetaan pois useaan kertaan esiintyvät jakson linkit
-	esac | awk '!x[$0]++'
+	esac | awk '!x[$0]++' | tee "${cache}"
 }
 function unified-episode-string {
 	link="$1"
@@ -623,7 +619,9 @@ function unified-worker {
 }
 
 
+##########
 # JAKSON TALLENNUS, VIRHEIDEN KÄSITTELY JA TIETOKANNAN YLLÄPITO
+
 function record-episode {
 	programme="$1"
 	eplink="$2"
@@ -760,9 +758,9 @@ function interpret {
 		done
 		;;
 	 r|rec)
-		[ -n "$2" ] && query-programmes "$2" | while read programme_withrating
+		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
 		 do
-			programme="$( remove-rating <<<"$programme_withrating" )"
+			programme="$( remove-rating <<<"$title" )"
 			record-regex "^$( escape-regex <<<"${programme}" )$" "${programme}" /dev/null && echo
 		done
 		;;
@@ -811,9 +809,9 @@ function interpret {
 			echo "$regex" > "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext} (\'${regex}\')"
 		elif [ -n "$regex" ]
 		 then
-			query-programmes "$regex" | while read programme_withrating
+			query-sourced-programmes "$regex" | while read source link title
 			 do
-				recorder="${vhs}/$( remove-rating <<<"$programme_withrating" )${vhsext}"
+				recorder="${vhs}/$( remove-rating <<<"$title" )${vhsext}"
 				touch "${recorder}" && echo "+ ${recorder}"
 			done
 		fi
