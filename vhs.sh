@@ -82,6 +82,10 @@ function dependencies {
 #######
 # SISÄISET APUOHJELMAT
 
+function remove-rating {
+	read programme_withrating
+	echo ${programme_withrating%% (+([SK[:digit:]]))}"
+}
 function escape-regex {
 	sed 's/[(){}\[^]/\\&/g; s/]/\\&/g'
 }
@@ -565,7 +569,7 @@ function query-programmes {
 
 	sorted-programmes | while read source link title
 	 do
-		[ -n "$regex" ] && ! [[ "${title%% (+([[:digit:]]))}" =~ $regex ]] && continue
+		[ -n "$regex" ] && ! [[ "$( remove-rating <<<"$title" )" =~ $regex ]] && continue
 		echo "$title"
 	done
 }
@@ -574,7 +578,7 @@ function query-sourced-programmes {
 
 	sorted-programmes | while read source link title
 	 do
-		[ -n "$regex" ] && ! [[ "${title%% (+([[:digit:]]))}" =~ $regex ]] && continue
+		[ -n "$regex" ] && ! [[ "$( remove-rating <<<"$title" )" =~ $regex ]] && continue
 		echo "$source" "$link" "$title"
 	done
 }
@@ -731,14 +735,14 @@ function interpret {
 	 p|prog)
 		query-sourced-programmes "$2" | while read source link title
 		 do
-			printf "%11s %s\n" "[$source]" "${title%% (+([[:digit:]]))}"
+			printf "%11s %s\n" "[$source]" "$( remove-rating <<<"$title" )"
 		done
 		;;
 	 e|ep)
 		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
 		 do
 			episodes="$( query-programme-episodes "$source" "$link" | wc -l )"
-			printf "%11s %s : %d jakso" "[$source]" "${title%% (+([[:digit:]]))}" "$episodes"
+			printf "%11s %s : %d jakso" "[$source]" "$( remove-rating <<<"$title" )" "$episodes"
 			[ $episodes -eq 1 ] || echo -n "a"
 			echo
 		done
@@ -746,7 +750,7 @@ function interpret {
 	 l|list)
 		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
 		 do
-			echo "${title%% (+([[:digit:]]))}"
+			remove-rating <<<"$title"
 			query-programme-episodes "$source" "$link" | while read eplink
 			 do unified-episode-string "${eplink}"
 			done | cat -n
@@ -755,7 +759,7 @@ function interpret {
 	 r|rec)
 		[ -n "$2" ] && query-programmes "$2" | while read programme_withrating
 		 do
-			programme="${programme_withrating%% (+([[:digit:]]))}"
+			programme="$( remove-rating <<<"$programme_withrating" )"
 			record-regex "^$( escape-regex <<<"${programme}" )$" "${programme}" /dev/null && echo
 		done
 		;;
@@ -763,7 +767,7 @@ function interpret {
 		exec 3<&0
 		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
 		 do
-			programme="${title%% (+([[:digit:]]))}"
+			programme="$( remove-rating <<<"$title" )"
 			echo "${programme}"
 			query-programme-episodes "$source" "$link" | tee "${tmp}/episodes.txt" | while read eplink
 			 do unified-episode-string "${eplink}"
@@ -806,7 +810,7 @@ function interpret {
 		 then
 			query-programmes "$regex" | while read programme_withrating
 			 do
-				recorder="${vhs}/${programme_withrating%% (+([[:digit:]]))}${vhsext}"
+				recorder="${vhs}/$( remove-rating <<<"$programme_withrating" )${vhsext}"
 				touch "${recorder}" && echo "+ ${recorder}"
 			done
 		fi
