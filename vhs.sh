@@ -11,17 +11,19 @@ lib="${HOME}/.vhs"
 # tallentimet (ja väliaikaistiedostot) sijoitetaan tänne (luodaan ellei olemassa)
 vhs="${HOME}/Movies/vhs"
 
-# skripti joka ajetaan valmiin nauhoitetun tiedoston loppusijoittamiseksi, jos olemassa
-finish="${lib}/finish.sh"
-# mikäli finish-skriptiä ei löydy, valmiit tiedostot sijoitetaan tänne, jos olemassa
+# valmiit tiedostot sijoitetaan tänne, jos olemassa
 fine="${HOME}/Movies/tunes"
-# valmiit sijoitetaan muutoin 'vhs'-hakemistoon ohjelmittain järjestettynä
 
 # tekstitykset haetaan tällä kielellä
 sublang="fin"
 
 # automaattitallentajien tiedostopääte
 vhsext=".txt"
+
+# alkuasetus-, metatiedon asetus- ja viimeistelyskripti
+profile_script="${lib}/profile"
+meta_script="${lib}/meta.sh"
+finish_script="${lib}/finish.sh"
 
 # käyttäjätunnisteet, bash-liput
 OSX_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:31.0) Gecko/20100101 Thunderbird/31.1.0 Lightning/3.3"
@@ -41,6 +43,9 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 
 # Cygwin-paikkaus
 [[ "$( uname )" =~ cygwin ]] && tmp="$( cygpath -m "$tmp" )"
+
+# Anna käyttäjän määritellä tarvittaessa lisää asetuksia ja apufunktioita
+[ -e "${profile_script}" ] && . "${profile_script}"
 
 
 #######
@@ -261,8 +266,8 @@ function meta-worker {
 
 	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
 	rm "${input}" "${subtitles}" &>/dev/null
-	if [ -x "${finish}" ]
-	 then . "${finish}" "${output}.${out_ext}"
+	if [ -x "${finish_script}" ]
+	 then . "${finish_script}" "${output}.${out_ext}"
 	fi
 	if [ -f "${output}.${out_ext}" ]
 	 then if [ -d "${fine}" ]
@@ -337,7 +342,8 @@ function areena-worker {
 	# yritetään tulkita sanallisesti ilmaistu kauden numero
 	[ -n "$snno" ] || snno="$( season-number <<<"$desc" )"
 
-	# suoritetaan tallentimessa annettu mahdollinen sarjakohtainen parsimiskoodi
+	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
+	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
 	. $custom_parser || return 100
 	echo
 
@@ -396,6 +402,8 @@ function ruutu-worker {
 	thumb="$( sed -n 's#.*<Startpicture href="\(http://[^"]*\)"/>.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && wget -q -O "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
+	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
+	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
 	. $custom_parser || return 100
 	echo
 
@@ -464,6 +472,8 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	source="$( curl -s -A "${iOS_agent}" "${link}" |sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)HLS.!.mp4/.*"/>.*#http://median3mobilevod.\1HLSH!.mp4#p' )"
 	[ -n "$source" ] || return 10
 
+	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
+	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
 	. $custom_parser || return 100
 	echo
 
@@ -515,6 +525,8 @@ function tv5-worker {
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && wget -q -O "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
+	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
+	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
 	. $custom_parser || return 100
 	echo
 	
