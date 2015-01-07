@@ -247,7 +247,7 @@ function meta-worker {
 		 # metatiedot elokuvan mukaisesti
 		 else AtomicParsley "${output}.m4v" \
 --stik value=9 \
---title "$programme" \
+--title "${programme#Elokuva: }" \
 --year "$( epoch-to-utc <<<"$epoch" )" \
 --purchaseDate "timestamp" \
 --Rating "$( movie-rating <<<"$agelimit" )" \
@@ -308,7 +308,7 @@ function areena-episodes {
 	type="$1" # "tv" tai "radio"
 	link="$2"
 	# vain yhden jakson sisältävät ohjelmalinkit (elokuvat tai konsertit) toimivat jakson linkkeinä sellaisenaan, tällöin search.rss-sivua ei löydy
-	curl -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
+	curl --fail -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
 	sed -n '/rss/ d; s#.*<link>\(.*\)</link>.*#\1#p'
 	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${type}/${link}"
 }
@@ -486,7 +486,9 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	fi
 
 	# poistu jos videolinkkiä ei löydy
-	source="$( cached-get "${iOS_agent}" "${link}" | sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)HLS.!.mp4/.*"/>.*#http://median3mobilevod.\1HLSH!.mp4#p' )"
+	source="$( cached-get "${iOS_agent}" "${link}" |\
+sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' |\
+sed 's#HLS[A-Z]#HLSH#' )"
 	[ -n "$source" ] || return 10
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
@@ -870,20 +872,21 @@ if [ $# -eq 0 ]
  then
 	if [ -n "$( echo "${vhs}"/*${vhsext} )" ]
 	 then
-		# älä aja automaattitallennusta, jos muita vhs.sh-prosesseja on käynnissä
-		existing_watermark="$( find -L "${vhs}" -name programmes.txt )"
-		if [ -n "$existing_watermark" ]
-		 then if [ -t 0 ]
-			 then echo "Skripti on jo käynnissä - tai se on kaatunut: poista hakemisto"
-				echo "$( dirname "$( dirname "$existing_watermark" )" )" >&2
+		# älä aja automaattitallennusta, jos sessio on jo käynnissä
+		existing_pidfile="$( find -L "${vhs}" -name autorec.pid )"
+		if [ -n "$existing_pidfile" ]
+		 then
+			if pgrep -F "$existing_pidfile" &>/dev/null
+			 then [ -t 0 ] && echo "Skripti on jo käynnissä: PID $( cat "$existing_pidfile" )" >&2
+				exit 0
+			 else rm -rf "$( dirname "$existing_pidfile" )" &>/dev/null
 			fi
-			exit 0
-		 else recording-worker
-			exit $?
 		fi
+		echo $$ > "${tmp}/autorec.pid"
+		recording-worker
+		exit $?
 	 else
 		echo "Ei asetettuja tallentimia!" >&2
-		echo >&2
 		print-help >&2
 	fi
  else
