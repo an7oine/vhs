@@ -25,7 +25,7 @@ profile_script="${lib}/profile"
 meta_script="${lib}/meta.sh"
 finish_script="${lib}/finish.sh"
 
-# käyttäjätunnisteet, bash-liput
+# käyttäjäagentit, bash-liput
 OSX_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:31.0) Gecko/20100101 Thunderbird/31.1.0 Lightning/3.3"
 iOS_agent="Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25"
 shopt -s extglob
@@ -38,6 +38,7 @@ shopt -s nocasematch
 
 tmp="$( mkdir -p "${vhs}"; mktemp -d "${vhs}/.vhs.XXXX" )"
 cd "${tmp}"
+mkdir "${tmp}/cache"
 trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" EXIT
 trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 
@@ -62,13 +63,12 @@ function dependencies {
 	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
 	which php &>/dev/null || echo -n "php "
     which curl &>/dev/null || echo -n "curl "
-    which wget &>/dev/null || echo -n "wget "
     which xpath &>/dev/null || echo -n "xpath "
     which yle-dl &>/dev/null || echo -n "yle-dl "
     which MP4Box &>/dev/null || echo -n "gpac "
-    ( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 |sed -n 's/^RTMPDump v//p' ) 2.4 ) \
+    ( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v//p' ) 2.4 ) \
      || echo -n "rtmpdump-2.4 "
-    ( which ffmpeg &>/dev/null && check-version $( ffmpeg -version |awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
+    ( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
      || echo -n "ffmpeg-1.2.10 "
     ( which AtomicParsley &>/dev/null && check-version $( AtomicParsley -version |awk '{print $3}' ) 0.9.5 ) \
      || echo -n "AtomicParsley-0.9.5 "
@@ -150,21 +150,31 @@ function movie-rating {
 }
 function season-number {
 	read description_text
-	[ -n "$( grep '[Ee]nsimmäi[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 1
-	[ -n "$( grep '[Tt]oi[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 2
-	[ -n "$( grep '[Kk]olma[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 3
-	[ -n "$( grep '[Nn]eljä[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 4
-	[ -n "$( grep '[Vv]iide[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 5
-	[ -n "$( grep '[Kk]uude[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 6
-	[ -n "$( grep '[Ss]eitsemä[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 7
-	[ -n "$( grep '[Kk]ahdeksa[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 8
-	[ -n "$( grep '[Yy]hdeksä[^ ]* tuotantokau' <<<"$description_text" )" ] && echo 9
+	( [ -n "$( sed -n 's#.*\([0-9]\{1,\}\)[.]* [tuotanto]*kau[sdt].*#\1#p' <<<"$description_text" | tee /dev/stderr )" ] 2>&1 ) && return 0
+	[ -n "$( grep '[Ee]nsimmäi[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 1 && return 0
+	[ -n "$( grep '[Tt]oi[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 2 && return 0
+	[ -n "$( grep '[Kk]olma[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 3 && return 0
+	[ -n "$( grep '[Nn]eljä[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 4 && return 0
+	[ -n "$( grep '[Vv]iide[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 5 && return 0
+	[ -n "$( grep '[Kk]uude[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 6 && return 0
+	[ -n "$( grep '[Ss]eitsemä[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 7 && return 0
+	[ -n "$( grep '[Kk]ahdeksa[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 8 && return 0
+	[ -n "$( grep '[Yy]hdeksä[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 9 && return 0
 }
 
 
 ########
 # TALLENNUKSEN APURUTIINIT
 
+function cached-get {
+	user_agent="$1"
+	url="$2"
+
+	cache="${tmp}/cache/${url//[^A-Za-z0-9]/-}"
+	cat "$cache" 2>/dev/null && return 0
+
+	curl -s -A "${user_agent}" "${url}" | tee "$cache"
+}
 function segment-downloader {
 	prefix="$1"
 	postfix="$2"
@@ -212,7 +222,7 @@ function meta-worker {
     fi
     [ $? -eq 0 ] || return 1
 
-	[ -n "$thumb" ] || thumb="REMOVE_ALL"
+	[ -s "$thumb" ] || thumb="REMOVE_ALL"
 
 	if [ "${out_ext}" = m4v ]
 	 then
@@ -276,7 +286,7 @@ function meta-worker {
 	if [ -x "${finish_script}" ]
 	 then . "${finish_script}" "${output}.${out_ext}"
 	fi
-	if [ -f "${output}.${out_ext}" ]
+	if [ -e "${output}.${out_ext}" ]
 	 then if [ -d "${fine}" ]
 		 then mv "${output}.${out_ext}" "${fine}/"
 		 else mkdir -p "${vhs}/${programme}/" && mv "${output}.${out_ext}" "${vhs}/${programme}/"
@@ -289,22 +299,22 @@ function meta-worker {
 # YLE AREENA
 
 function areena-programmes {
-	wget -q -O - http://areena.yle.fi/tv/a-o |\
+	curl -s http://areena.yle.fi/tv/a-o |\
 	sed -n '/<a.*href="http:\/\/areena.yle.fi\/tv\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/tv/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-tv \1 \2#p'
-	wget -q -O - http://areena.yle.fi/radio/a-o |\
+	curl -s http://areena.yle.fi/radio/a-o |\
 	sed -n '/<a.*href="http:\/\/areena.yle.fi\/radio\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/radio/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-r \1 \2#p'
 }
 function areena-episodes {
 	type="$1" # "tv" tai "radio"
 	link="$2"
 	# vain yhden jakson sisältävät ohjelmalinkit (elokuvat tai konsertit) toimivat jakson linkkeinä sellaisenaan, tällöin search.rss-sivua ei löydy
-	wget -q -O - "http://areena.yle.fi/api/search.rss?id=${link}" |\
+	curl -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
 	sed -n '/rss/ d; s#.*<link>\(.*\)</link>.*#\1#p'
 	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${type}/${link}"
 }
 function areena-episode-string {
 	link="$1"
-	metadata="$( curl -s -A "${OSX_agent}" "${link}" )"
+	metadata="$( cached-get "${OSX_agent}" "${link}" )"
 	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
 	desc="$( sed -n 's/.*title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" )"
 	title="$( sed -n 's/.*title: *'\''\([^'\'']*\) *'\'',.*/\1/p' <<<"$metadata" )"
@@ -315,7 +325,7 @@ function areena-worker {
     programme="$2"
 	custom_parser="$3"
 
-	metadata="$( curl -s -A "${OSX_agent}" "${link}" )"
+	metadata="$( cached-get "${OSX_agent}" "${link}" )"
 
 	type="$( sed -n '/type:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )" # "audio" tai "video"
 
@@ -326,7 +336,7 @@ function areena-worker {
 	agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*<div id="areena_player" class="wrapper main player"  style="background-image: url(\(http://.*.jpg\));">.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && wget -q -O "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
@@ -371,33 +381,33 @@ function areena-worker {
 # NELONEN RUUTU
 
 function ruutu-programmes {
-	wget -q -O - http://www.ruutu.fi/ohjelmat |\
+	curl -s http://www.ruutu.fi/ohjelmat |\
 	sed -n 's#.*<a.*href="/ohjelmat/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
 	link="$1"
 	# suodatetaan pois jaksot, joiden kuvauksessa (19 riviä ennen linkkiä) mainitaan 'ruutuplus'
-	wget -q -O - "http://www.ruutu.fi/ohjelmat/${link}" |\
+	curl -s "http://www.ruutu.fi/ohjelmat/${link}" |\
 	sed '/<div class="ruutuplus">/ { n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;d; }' |\
 	sed -n 's#.*<a href="\(/ohjelmat/'"${link}"'/[^?"]*\)">.*#http://www.ruutu.fi\1#p'
 }
 function ruutu-episode-string {
 	link="$1"
-	curl -s -A "${OSX_agent}" "${link}" | dec-html | sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p'
+	cached-get "${OSX_agent}" "${link}" | dec-html | sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p'
 }
 function ruutu-worker {
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
 
-	html_metadata="$( curl -s -A "${OSX_agent}" "${link}" | dec-html )"
+	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
 	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\) - .*/\1/p' <<<"$og_title" )"
 	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]* - .*/\1/p' <<<"$og_title" )"
 	episode="$( sed -n 's/.* - Kausi [0-9]* - Jakso [0-9]* - \(.*\)/\1/p' <<<"$og_title" )"
 
 	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
-	metadata="$( curl -s -A "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | dec-html )"
 
 	source="$( sed -n 's#.*<MediaFile .*>\(rtmp://stream.nelonen.fi.*\)</MediaFile>#\1#p' <<<"$metadata" )"
 	[ -n "$source" ] || return 10
@@ -407,7 +417,7 @@ function ruutu-worker {
 	agelimit="$( sed -n 's#.*<AgeLimit>\([0-9]*\)</AgeLimit>.*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*<Startpicture href="\(http://[^"]*\)"/>.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && wget -q -O "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
@@ -425,22 +435,22 @@ function ruutu-worker {
 # MTV KATSOMO
 
 function katsomo-programmes {
-	wget -q -O - "http://www.katsomo.fi/#" |\
+	curl -s "http://www.katsomo.fi/#" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a.*href="http://www.katsomo.fi/?treeId=\([^"]*\)".*>\([^<]\{1,\}\)<.*#katsomo \1 \2#p'
 }
 function katsomo-episodes {
 	link="$1"
-	# suodatetaan pois maksulliset ("buy-link") jaksot
+	# suodatetaan pois maksulliset (muut kuin "play-link") jaksot
 	curl -s -A "${OSX_agent}" "http://www.katsomo.fi/?treeId=${link}" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="\(/?progId=[^"]*\)".*class="play-link".*>.*#http://m.katsomo.fi\1#p'
 }
 function katsomo-episode-string {
 	link="$1"
-	html_metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 |\
+	html_metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
-	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" |iconv -f ISO-8859-1 )"
+	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
 	desc="$( xpath //Playback/Description <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' |dec-html )"
@@ -452,31 +462,31 @@ function katsomo-worker {
 	custom_parser="$3"
 
 	# hae jakson nimi sekä kauden ja jakson numero www.katsomo.fi-sivun kautta
-	html_metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" |iconv -f ISO-8859-1 |\
+	html_metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
 	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
 	snno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Kkv][au][uo]si[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
-	metadata="$( curl -s -A "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" |iconv -f ISO-8859-1 )"
+	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 )"
 
 	desc="$( xpath //Playback/Description <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | dec-html )"
 	epoch="$( xpath //Playback/TxTime <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | txtime-to-epoch )"
 	agelimit="$( xpath //Playback/AgeRating <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' )"
 
-	thumb="$( xpath //Playback/ImageUrl <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' |dec-html )"
-	[ -n "${thumb}" ] && wget -q -O "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	thumb="$( xpath //Playback/ImageUrl <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | dec-html )"
+	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	sublink="$( xpath //Playback/Subtitles/Subtitle <<<"$metadata" 2>/dev/null | sed 's#.*\(http://[^"]*\).*#\1#' )"
 	if [ -n "$sublink" ]
 	 then subtitles="${tmp}/vhs.${sublang}.srt"
-		curl -s -A "${OSX_agent}" "${sublink}" |dec-html |ttml-to-srt > "$subtitles"
+		curl -s -A "${OSX_agent}" "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
 	 else subtitles=""
 	fi
 
 	# poistu jos videolinkkiä ei löydy
-	source="$( curl -s -A "${iOS_agent}" "${link}" |sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)HLS.!.mp4/.*"/>.*#http://median3mobilevod.\1HLSH!.mp4#p' )"
+	source="$( cached-get "${iOS_agent}" "${link}" | sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)HLS.!.mp4/.*"/>.*#http://median3mobilevod.\1HLSH!.mp4#p' )"
 	[ -n "$source" ] || return 10
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
@@ -495,23 +505,23 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 # TV5
 
 function tv5-programmes {
-	wget -q -O - 'http://tv5.fi/nettitv' |\
+	curl -s 'http://tv5.fi/nettitv' |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="/nettitv/\([^/"]*\)/.*">\([^<]*\)</a>.*#tv5 \1 \2#p' |sed 's/, osa [0-9]*//'
 }
 function tv5-episodes {
 	link="$1"
 	# suodatetaan pois jaksot, jotka eivät (enää) ole katsottavissa
-	wget -q -O - "http://tv5.fi/nettitv/${link}" |\
+	curl -s "http://tv5.fi/nettitv/${link}" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="\(/nettitv/'"${link}"'/[^"]*\)".*#http://tv5.fi\1#p' |\
 	while read eplink
-	 do [ -n "$( curl -s "$eplink" | sed -n '/jwplayer('\''video'\'').setup/ p' )" ] && echo "$eplink"
+	 do [ -n "$( cached-get "${OSX_agent}" "$eplink" | sed -n '/jwplayer('\''video'\'').setup/ p' )" ] && echo "$eplink"
 	done
 }
 function tv5-episode-string {
 	link="$1"
-	metadata="$( curl -s -A "${OSX_agent}" "${link}" | sed -n '/<meta.*\/>/ p; /jwplayer('\''video'\'').setup/ p' )"
+	metadata="$( cached-get "${OSX_agent}" "${link}" | sed -n '/<meta.*\/>/ p; /jwplayer('\''video'\'').setup/ p' )"
 	epno="$( sed -n 's#.*<meta property="og:title" content=".*, osa \([0-9]*\)".*#\1#p' <<<"$metadata" )"
 	desc="$( sed -n 's#.*<meta property="og:description" content="\([^"]*\)".*#\1#p' <<<"$metadata" )"
 	echo "Osa ${epno}: ${desc}"
@@ -522,7 +532,7 @@ function tv5-worker {
 	custom_parser="$3"
 
 	# muistin säästämiseksi ota ympäristömuuttujaan 'metadata' vain oleelliset osat sivun sisällöstä
-	metadata="$( curl -s -A "${OSX_agent}" "${link}" | sed -n '/<meta.*\/>/ p; /jwplayer('\''video'\'').setup/ p' )"
+	metadata="$( cached-get "${OSX_agent}" "${link}" | sed -n '/<meta.*\/>/ p; /jwplayer('\''video'\'').setup/ p' )"
 
 	epno="$( sed -n 's#.*<meta property="og:title" content=".*, osa \([0-9]*\)".*#\1#p' <<<"$metadata" )"
 	desc="$( sed -n 's#.*<meta property="og:description" content="\([^"]*\)".*#\1#p' <<<"$metadata" )"
@@ -530,7 +540,7 @@ function tv5-worker {
 	direct_mp4="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://[^'\'']*[.]mp4\)'\''.*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && wget -q -O "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
@@ -538,14 +548,14 @@ function tv5-worker {
 	echo
 	
 	# hae ensisijaisesti lähdetiedosto sellaisenaan, yritä sen jälkeen segmentoitua latausta
-	if [ -z "${direct_mp4}" ] || ! wget -q -O "${tmp}/vhs.m4v" "${direct_mp4}"
+	if [ -z "${direct_mp4}" ] || ! curl -s -o "${tmp}/vhs.m4v" "${direct_mp4}"
 	 then
 		# nouda master-luettelo eri tarkkuuksia vastaavista soittolistoista
 		master_m3u8="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://.*/master.m3u8\)'\''.*#\1#p' <<<"$metadata" )"
 		[ -n "$master_m3u8" ] || return 10
 
 		# poimi master-luettelon viimeinen (korkeimman tarkkuuden) soittolista
-		postfix="$( curl -s -A "${OSX_agent}" "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
+		postfix="$( curl -s "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
 
 		# hae kaikki videosegmentit (aloittaen 1:stä) ja muunna lennossa mp4-muotoon
 		prefix="${master_m3u8%/master.m3u8}/segment"
@@ -561,12 +571,13 @@ function tv5-worker {
 
 # ohjelmalistaus ladataan verkosta vain kerran ja tallennetaan ajokohtaiseen välimuistitiedostoon
 function sorted-programmes {
-	cat "${tmp}/programmes.txt" 2>/dev/null && return 0
-	[ -d "${tmp}" ] || return 1
+	cache="${tmp}/cache/programmes.txt"
+	cat "${cache}" 2>/dev/null && return 0
+	[ -d "${tmp}/cache" ] || return 1
 
 	( areena-programmes; ruutu-programmes; katsomo-programmes; tv5-programmes ) |\
 	LC_ALL=UTF-8 sort -f -u -t ' ' -k 3 |\
-	tee "${tmp}/programmes.txt"
+	tee "${cache}"
 }
 function query-sourced-programmes {
     regex="$1"
@@ -581,9 +592,9 @@ function query-programme-episodes {
 	source="$1"
 	link="$2"
 
-	cache="${tmp}/${source}-${link##*[/=]}-episodes.txt"
+	cache="${tmp}/cache/${source}-${link##*[/=]}-episodes.txt"
 	cat "${cache}" 2>/dev/null && return 0
-	[ -d "${tmp}" ] || return 1
+	[ -d "${tmp}/cache" ] || return 1
 
 	case $source in
 	 areena-tv) areena-episodes tv "$link" ;;
@@ -663,8 +674,7 @@ function record-regex {
 	query-sourced-programmes "$regex" | while read source link title
 	 do
 		query-programme-episodes "$source" "$link" | while read eplink
-		 do
-			record-episode "$programme" "$eplink" "$custom_parser"
+		 do record-episode "$programme" "$eplink" "$custom_parser"
 		done | while read receps
 		 do
 			[ -z "$neweps" ] && echo -n "${programme}" && neweps="y"
@@ -825,11 +835,15 @@ function interpret {
 		;;
 	 i|interactive)
 	 	print-cmds
-		while read -ep"vhs.sh> " cmdline
+		while read -e -p "vhs.sh> " cmdline
 		 do
 			history -s $cmdline
-		 	[ "$cmdline" != "q" -a "$cmdline" != "quit" ] || break
-		 	interpret $cmdline
+		 	if [ "$cmdline" = "q" -o "$cmdline" = "quit" ]
+			 then break
+			elif [ "$cmdline" = "h" -o "$cmdline" = "help" ]
+			 then print-cmds
+			 else interpret $cmdline
+			fi
 		done
 		;;
 	 *)
@@ -857,13 +871,20 @@ if [ $# -eq 0 ]
 	if [ -n "$( echo "${vhs}"/*${vhsext} )" ]
 	 then
 		# älä aja automaattitallennusta, jos muita vhs.sh-prosesseja on käynnissä
-		[ -z "$( find -L "${vhs}" -name programmes.txt )" ] || exit 0
-		recording-worker
-		exit $?
+		existing_watermark="$( find -L "${vhs}" -name programmes.txt )"
+		if [ -n "$existing_watermark" ]
+		 then if [ -t 0 ]
+			 then echo "Skripti on jo käynnissä - tai se on kaatunut: poista hakemisto"
+				echo "$( dirname "$( dirname "$existing_watermark" )" )" >&2
+			fi
+			exit 0
+		 else recording-worker
+			exit $?
+		fi
 	 else
-		echo "Ei asetettuja tallentimia!"
-		echo
-		print-help
+		echo "Ei asetettuja tallentimia!" >&2
+		echo >&2
+		print-help >&2
 	fi
  else
 	interpret "$@"
