@@ -26,7 +26,7 @@ meta_script="${lib}/meta.sh"
 finish_script="${lib}/finish.sh"
 
 # käyttäjäagentit, bash-liput
-OSX_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:31.0) Gecko/20100101 Thunderbird/31.1.0 Lightning/3.3"
+OSX_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.10 (KHTML, like Gecko) Version/8.0.3 Safari/600.3.10"
 iOS_agent="Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25"
 shopt -s extglob
 shopt -s nullglob
@@ -98,6 +98,15 @@ function match-any-regex {
 function dec-html {
 	# muunnetaan html-koodatut erikoismerkit oletusmerkistöön
 	php -R 'echo html_entity_decode($argn, ENT_QUOTES)."\n";'
+}
+function get-xml-field {
+	path="$1"
+	field="$2"
+	xpath "$path" 2>/dev/null | sed 's#.*'"$field"'="\([^"]*\)".*#\1#'
+}
+function get-xml-content {
+	path="$1"
+	xpath "$path" 2>/dev/null | sed 's/<[^<]*>//g'
 }
 function ttml-to-srt {
 	# suodatetaan pelkät tekstit, kukin omalle rivilleen
@@ -413,16 +422,16 @@ function ruutu-worker {
 	episode="$( sed -n 's/.* - Kausi [0-9]* - Jakso [0-9]* - \(.*\)/\1/p' <<<"$og_title" )"
 
 	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
-	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 | dec-html )"
 
-	source="$( sed -n 's#.*<MediaFile .*>\(rtmp://stream.nelonen.fi.*\)</MediaFile>#\1#p' <<<"$metadata" )"
+	source="$( get-xml-content //Playerdata/Clip/MediaFiles/MediaFile <<<"$metadata" )"
 	[ -n "$source" ] || return 10
 
-	desc="$( sed -n 's#.*<Program.*description="\([^"]*\)".*#\1#p' <<<"$metadata" )"
-	epoch="$( sed -n 's#.*<Program.*start_time="\([^"]*\)".*#\1:00#p' <<<"$metadata" | txtime-to-epoch )"
-	agelimit="$( sed -n 's#.*<AgeLimit>\([0-9]*\)</AgeLimit>.*#\1#p' <<<"$metadata" )"
+	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
+	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time<<<"$metadata" | txtime-to-epoch )"
+	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
 
-	thumb="$( sed -n 's#.*<Startpicture href="\(http://[^"]*\)"/>.*#\1#p' <<<"$metadata" )"
+	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
@@ -456,10 +465,10 @@ function katsomo-episode-string {
 	link="$1"
 	html_metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
-	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 )"
+	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 | dec-html )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
-	desc="$( xpath //Playback/Description <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' |dec-html )"
+	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
 	echo "Osa ${epno}: ${episode} ${desc}"
 }
 function katsomo-worker {
@@ -475,16 +484,19 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
-	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 )"
+	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 | dec-html )"
 
-	desc="$( xpath //Playback/Description <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | dec-html )"
-	epoch="$( xpath //Playback/TxTime <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | txtime-to-epoch )"
-	agelimit="$( xpath //Playback/AgeRating <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' )"
+	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
+	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | txtime-to-epoch )"
+	agelimit="$( get-xml-content //Playback/AgeRating <<<"$metadata" )"
 
-	thumb="$( xpath //Playback/ImageUrl <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | dec-html )"
+	# jos jakson nimenä on pelkkä ohjelman nimi, kirjaa lähetysaika jakson nimeksi
+	[[ "$episode" =~ "$programme" ]] && episode="$( epoch-to-touch )"
+
+	thumb="$( get-xml-content //Playback/ImageUrl <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
-	sublink="$( xpath //Playback/Subtitles/Subtitle <<<"$metadata" 2>/dev/null | sed 's#.*\(http://[^"]*\).*#\1#' )"
+	sublink="$( get-xml-content //Playback/Subtitles/Subtitle <<<"$metadata" | sed 's#.*\(http://[^"]*\)".*#\1#' )"
 	if [ -n "$sublink" ]
 	 then subtitles="${tmp}/vhs.${sublang}.srt"
 		curl -L -s "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
