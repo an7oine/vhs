@@ -121,7 +121,7 @@ function txtime-to-epoch {
 	read txtime
 	[ -n "$txtime" ] || return
 	if [ "$( uname )" = "Darwin" ]
-	 then date -j -f '%d.%m.%Y %H:%M' "${txtime}" "+%s" # Mac OS X
+	 then date -j -f '%d.%m.%Y %H:%M:%S' "${txtime}" "+%s" # Mac OS X
 	 else date -d "$( sed 's#\(..\)[.]\(..\)[.]\(....\)#\3-\2-\1#' <<<"$txtime" )" "+%s" # Linux / Cygwin
 	fi
 }
@@ -428,7 +428,7 @@ function ruutu-worker {
 	[ -n "$source" ] || return 10
 
 	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
-	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time<<<"$metadata" | txtime-to-epoch )"
+	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time<<<"$metadata" | sed 's#$#:00#' | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
 
 	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
@@ -487,7 +487,7 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 | dec-html )"
 
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
-	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | sed 's#:[0-9][0-9]$##' | txtime-to-epoch )"
+	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playback/AgeRating <<<"$metadata" )"
 
 	# jos jakson nimenä on pelkkä ohjelman nimi, kirjaa lähetysaika jakson nimeksi
@@ -780,6 +780,7 @@ function interpret {
 		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
 		 do
 			programme="$( remove-rating <<<"$title" )"
+			echo "${programme}"
 			query-programme-episodes "$source" "$link" | while read eplink
 			 do record-episode "$programme" "$eplink" /dev/null
 			done | while read receps
