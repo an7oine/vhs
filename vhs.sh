@@ -186,7 +186,7 @@ function segment-downloader {
 		# lopeta viimeisen ei-tyhjän segmentin jälkeen
 		curl -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" -o "${tmp}/segment.ts"
 		# hylkää tekstimuotoiset (puuttuvaa videotiedostoa ilmaisevat) dokumentit (TV5)
-		[ -n "$( file "${tmp}/segment.ts" |grep 'HTML document text' )" ] && rm "${tmp}/segment.ts" && break
+		[ -n "$( file "${tmp}/segment.ts" | grep 'HTML document text' )" ] && rm "${tmp}/segment.ts" && break
 		cat "${tmp}/segment.ts" 2>/dev/null || break
 		rm "${tmp}/segment.ts"
 	done
@@ -217,10 +217,9 @@ function meta-worker {
 	
 	# lisää tekstitykset jos ne on annettu, muutoin käytä syötettä sellaisenaan
     if [ -n "$subtitles" ]
-     then MP4Box -add "${subtitles}:lang=${sublang}:hdlr=sbtl" -out "${output}.${out_ext}" "${input}" &>/dev/null
+     then MP4Box -add "${subtitles}:lang=${sublang}:hdlr=sbtl" -out "${output}.${out_ext}" "${input}" &>/dev/null || return 2
      else mv "${input}" "${output}.${out_ext}"
     fi
-    [ $? -eq 0 ] || return 1
 
 	[ -s "$thumb" ] || thumb="REMOVE_ALL"
 
@@ -276,7 +275,7 @@ function meta-worker {
 --comment "$comment" \
 --overWrite &>/dev/null
 	fi
-    [ $? -eq 0 ] || return 2
+    [ $? -eq 0 ] || return 3
     
 	# aseta julkaisuajankohta tulostiedoston aikaleimaksi
 	touch -t "$( epoch-to-touch <<<"$epoch" )" "${output}.${out_ext}"
@@ -292,6 +291,7 @@ function meta-worker {
 		 else mkdir -p "${vhs}/${programme}/" && mv "${output}.${out_ext}" "${vhs}/${programme}/"
 		fi
 	fi
+	[ $? -eq 0 ] || return 1
 }
 
 
@@ -655,8 +655,9 @@ function record-episode {
 	unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
 	case $? in
 	 0) echo "[${clipid}]"; touch "$donefile";;
-	 1) echo "(${clipid}: GPAC-VIRHE)" ;;
-	 2) echo "(${clipid}: METATIETOVIRHE)" ;;
+	 1) echo "(${clipid}: TIEDOSTOVIRHE)" ;;
+	 2) echo "(${clipid}: TEKSTITYSVIRHE)" ;;
+	 3) echo "(${clipid}: METATIETOVIRHE)" ;;
 	 10) echo "(${clipid}: EI SAATAVILLA)" ;;
 	 20) echo "(${clipid}: LATAUSVIRHE)" ;;
 	 100) ;; # ohitettu, ei virhettä
@@ -690,17 +691,21 @@ function record-regex {
 # AUTOMAATTITALLENTAJA
 
 function recording-worker {
+	custom_parser="${tmp}/custom-parser.sh"
+	
 	for recorder in "${vhs}"/*"${vhsext}"
 	 do
 		programme="$( basename "$recorder" ${vhsext} )"
-		regex="$( head -n 1 <"$recorder" )"
+		regex_def="$( sed 1q "$recorder" )"
+		sed 1d "$recorder" >"$custom_parser"
 
-		custom_parser="${tmp}/custom-parser.sh"
-		sed -n '2,$ p' <"$recorder" >"$custom_parser"
-
-		[ -z "${regex}" ] && regex="^$( escape-regex <<<"$programme" )$"
-
-		record-regex "$regex" "$programme" "$custom_parser" | tee "${tmp}/record-output.txt"
+		if [ -n "${regex_def}" ]
+		 then
+			tr '|' '\n' <<<"${regex_def}" | while read regex
+			 do record-regex "$regex" "$programme" "$custom_parser"
+			done
+		 else record-regex "^$( escape-regex <<<"$programme" )$" "$programme" "$custom_parser"
+		fi | tee "${tmp}/record-output.txt"
 
 		[ -s "${tmp}/record-output.txt" ] && echo
 		rm "${tmp}/record-output.txt"
@@ -773,7 +778,11 @@ function interpret {
 		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
 		 do
 			programme="$( remove-rating <<<"$title" )"
-			record-regex "^$( escape-regex <<<"${programme}" )$" "${programme}" /dev/null && echo
+			query-programme-episodes "$source" "$link" | while read eplink
+			 do record-episode "$programme" "$eplink" /dev/null
+			done | while read receps
+			 do ( [ -n "$receps" ] && echo -n "$receps " ) || echo -n "..."
+			done && echo
 		done
 		;;
 	 s|select)
@@ -786,17 +795,17 @@ function interpret {
 			 do unified-episode-string "${eplink}"
 			done | cat -n
 
-			read -ep"Valitse tallennettavat jaksot: " indices <&3
-			history -s $indices
-			indices="$( eval echo "$( sed 's/\([0-9]*\)-\([0-9]*\)/{\1..\2}/g' <<<"${indices}" )" )"
+			read -e -p "Valitse tallennettavat jaksot: " indices <&3
 
-			for index in $indices
+			# laajennetaan merkinnät muotoa '1-5' muotoon '1 2 3 4 5'
+			for i in $( eval echo "$( sed 's/\([0-9]*\)-\([0-9]*\)/{\1..\2}/g' <<<"${indices}" )" )
 			 do
-				record-episode "$programme" "$( sed -n "${index} p" "${tmp}/episodes.txt" )" /dev/null
+				if [ "$i" -gt 0 ] 2>/dev/null
+				 then record-episode "$programme" "$( sed -n "$i p" "${tmp}/episodes.txt" )" /dev/null
+				fi
 			done | while read receps
-			 do [ -n "$receps" ] && echo -n "$receps "
-			done
-			echo
+			 do ( [ -n "$receps" ] && echo -n "$receps " ) || echo -n "..."
+			done && echo
 		done
 		exec 3<&-
 		;;
@@ -807,10 +816,10 @@ function interpret {
 		 do
 			programme="$( basename "${recorder}" "${vhsext}" )"
 			[ -n "$2" ] && ! [[ "$programme" =~ $2 ]] && continue
-			if [ -s "$recorder" ]
-			 then echo "${programme} (\'$( head -n 1 <"$recorder" )\')"
-			 else echo "${programme}"
-			fi
+			echo -n "${programme} "
+			[ -n "$( sed 1q "$recorder" )" ] && echo -n "($( sed 1q "$recorder" ))"
+			[ -n "$( sed 1d "$recorder" )" ] && echo -n "*"
+			echo
 		done
 		;;
 	 a|add)
@@ -818,7 +827,7 @@ function interpret {
 	 	if [ -n "$3" ]
 		 then
 			programme="$3"
-			echo "$regex" > "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext} (\'${regex}\')"
+			echo "$regex" > "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext} (${regex})"
 		elif [ -n "$regex" ]
 		 then
 			query-sourced-programmes "$regex" | while read source link title
