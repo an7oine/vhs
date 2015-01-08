@@ -80,7 +80,7 @@ function dependencies {
 
 
 #######
-# SISÄISET APUOHJELMAT
+# SISÄISET APUOHJELMAT (VAKIOSYÖTE-VAKIOTULOSTE)
 
 function remove-rating {
 	read programme_withrating
@@ -88,6 +88,12 @@ function remove-rating {
 }
 function escape-regex {
 	sed 's/[(){}\[^]/\\&/g; s/]/\\&/g'
+}
+function match-any-regex {
+	programme="$1"
+	tr '|' '\n' | while read regex
+	 do [[ "$programme" =~ $regex ]] && break
+	done
 }
 function dec-html {
 	# muunnetaan html-koodatut erikoismerkit oletusmerkistöön
@@ -173,18 +179,18 @@ function cached-get {
 	cache="${tmp}/cache/${url//[^A-Za-z0-9]/-}"
 	cat "$cache" 2>/dev/null && return 0
 
-	curl -s -A "${user_agent}" "${url}" | tee "$cache"
+	curl -L -s -A "${user_agent}" "${url}" | tee "$cache"
 }
 function segment-downloader {
 	prefix="$1"
 	postfix="$2"
 	begin="$3"
 
-	# hae kaikki videosegmentit
+	# hae kaikki videosegmentit, lopeta viimeisen ei-tyhjän jälkeen
 	for seg in $( seq ${begin} 9999 )
 	 do
-		# lopeta viimeisen ei-tyhjän segmentin jälkeen
-		curl -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" -o "${tmp}/segment.ts"
+		# lataa segmentit mobiiliagentilla (Katsomo)
+		curl -L -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" -o "${tmp}/segment.ts"
 		# hylkää tekstimuotoiset (puuttuvaa videotiedostoa ilmaisevat) dokumentit (TV5)
 		[ -n "$( file "${tmp}/segment.ts" | grep 'HTML document text' )" ] && rm "${tmp}/segment.ts" && break
 		cat "${tmp}/segment.ts" 2>/dev/null || break
@@ -299,16 +305,16 @@ function meta-worker {
 # YLE AREENA
 
 function areena-programmes {
-	curl -s http://areena.yle.fi/tv/a-o |\
+	curl -L -s http://areena.yle.fi/tv/a-o |\
 	sed -n '/<a.*href="http:\/\/areena.yle.fi\/tv\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/tv/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-tv \1 \2#p'
-	curl -s http://areena.yle.fi/radio/a-o |\
+	curl -L -s http://areena.yle.fi/radio/a-o |\
 	sed -n '/<a.*href="http:\/\/areena.yle.fi\/radio\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/radio/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-r \1 \2#p'
 }
 function areena-episodes {
 	type="$1" # "tv" tai "radio"
 	link="$2"
 	# vain yhden jakson sisältävät ohjelmalinkit (elokuvat tai konsertit) toimivat jakson linkkeinä sellaisenaan, tällöin search.rss-sivua ei löydy
-	curl --fail -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
+	curl -L --fail -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
 	sed -n '/rss/ d; s#.*<link>\(.*\)</link>.*#\1#p'
 	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${type}/${link}"
 }
@@ -336,7 +342,7 @@ function areena-worker {
 	agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*<div id="areena_player" class="wrapper main player"  style="background-image: url(\(http://.*.jpg\));">.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
@@ -381,13 +387,13 @@ function areena-worker {
 # NELONEN RUUTU
 
 function ruutu-programmes {
-	curl -s http://www.ruutu.fi/ohjelmat |\
+	curl -L -s http://www.ruutu.fi/ohjelmat |\
 	sed -n 's#.*<a.*href="/ohjelmat/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
 	link="$1"
 	# suodatetaan pois jaksot, joiden kuvauksessa (19 riviä ennen linkkiä) mainitaan 'ruutuplus'
-	curl -s "http://www.ruutu.fi/ohjelmat/${link}" |\
+	curl -L -s "http://www.ruutu.fi/ohjelmat/${link}" |\
 	sed '/<div class="ruutuplus">/ { n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;d; }' |\
 	sed -n 's#.*<a href="\(/ohjelmat/'"${link}"'/[^?"]*\)">.*#http://www.ruutu.fi\1#p'
 }
@@ -417,7 +423,7 @@ function ruutu-worker {
 	agelimit="$( sed -n 's#.*<AgeLimit>\([0-9]*\)</AgeLimit>.*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*<Startpicture href="\(http://[^"]*\)"/>.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
@@ -435,14 +441,14 @@ function ruutu-worker {
 # MTV KATSOMO
 
 function katsomo-programmes {
-	curl -s "http://www.katsomo.fi/#" |\
+	curl -L -s "http://www.katsomo.fi/#" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a.*href="http://www.katsomo.fi/?treeId=\([^"]*\)".*>\([^<]\{1,\}\)<.*#katsomo \1 \2#p'
 }
 function katsomo-episodes {
 	link="$1"
 	# suodatetaan pois maksulliset (muut kuin "play-link") jaksot
-	curl -s -A "${OSX_agent}" "http://www.katsomo.fi/?treeId=${link}" |\
+	curl -L -s "http://www.katsomo.fi/?treeId=${link}" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="\(/?progId=[^"]*\)".*class="play-link".*>.*#http://m.katsomo.fi\1#p'
 }
@@ -476,17 +482,17 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	agelimit="$( xpath //Playback/AgeRating <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' )"
 
 	thumb="$( xpath //Playback/ImageUrl <<<"$metadata" 2>/dev/null | sed 's/<[^<]*>//g' | dec-html )"
-	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	sublink="$( xpath //Playback/Subtitles/Subtitle <<<"$metadata" 2>/dev/null | sed 's#.*\(http://[^"]*\).*#\1#' )"
 	if [ -n "$sublink" ]
 	 then subtitles="${tmp}/vhs.${sublang}.srt"
-		curl -s -A "${OSX_agent}" "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
+		curl -L -s "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
 	 else subtitles=""
 	fi
 
 	# poistu jos videolinkkiä ei löydy
-	source="$( cached-get "${iOS_agent}" "${link}" |\
+	source="$( curl -L -s -A "${iOS_agent}" "${link}" |\
 sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' |\
 sed 's#HLS[A-Z]#HLSH#' )"
 	[ -n "$source" ] || return 10
@@ -507,14 +513,14 @@ sed 's#HLS[A-Z]#HLSH#' )"
 # TV5
 
 function tv5-programmes {
-	curl -s 'http://tv5.fi/nettitv' |\
+	curl -L -s 'http://tv5.fi/nettitv' |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="/nettitv/\([^/"]*\)/.*">\([^<]*\)</a>.*#tv5 \1 \2#p' |sed 's/, osa [0-9]*//'
 }
 function tv5-episodes {
 	link="$1"
 	# suodatetaan pois jaksot, jotka eivät (enää) ole katsottavissa
-	curl -s "http://tv5.fi/nettitv/${link}" |\
+	curl -L -s "http://tv5.fi/nettitv/${link}" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="\(/nettitv/'"${link}"'/[^"]*\)".*#http://tv5.fi\1#p' |\
 	while read eplink
@@ -542,7 +548,7 @@ function tv5-worker {
 	direct_mp4="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://[^'\'']*[.]mp4\)'\''.*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
@@ -550,14 +556,14 @@ function tv5-worker {
 	echo
 	
 	# hae ensisijaisesti lähdetiedosto sellaisenaan, yritä sen jälkeen segmentoitua latausta
-	if [ -z "${direct_mp4}" ] || ! curl -s -o "${tmp}/vhs.m4v" "${direct_mp4}"
+	if [ -z "${direct_mp4}" ] || ! curl -L -s -o "${tmp}/vhs.m4v" "${direct_mp4}"
 	 then
 		# nouda master-luettelo eri tarkkuuksia vastaavista soittolistoista
 		master_m3u8="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://.*/master.m3u8\)'\''.*#\1#p' <<<"$metadata" )"
 		[ -n "$master_m3u8" ] || return 10
 
 		# poimi master-luettelon viimeinen (korkeimman tarkkuuden) soittolista
-		postfix="$( curl -s "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
+		postfix="$( curl -L -s "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
 
 		# hae kaikki videosegmentit (aloittaen 1:stä) ja muunna lennossa mp4-muotoon
 		prefix="${master_m3u8%/master.m3u8}/segment"
@@ -586,7 +592,7 @@ function query-sourced-programmes {
 
 	sorted-programmes | while read source link title
 	 do
-		[ -n "$regex" ] && ! [[ "$( remove-rating <<<"$title" )" =~ $regex ]] && continue
+		[ -n "$regex" ] && ! match-any-regex "$( remove-rating <<<"$title" )" <<<"$regex" && continue
 		echo "$source" "$link" "$title"
 	done
 }
@@ -666,27 +672,6 @@ function record-episode {
 }
 
 
-###########
-# REGEX-TALLENTAJA
-
-function record-regex {
-	regex="$1"
-	programme="$2"
-	custom_parser="$3"
-
-	query-sourced-programmes "$regex" | while read source link title
-	 do
-		query-programme-episodes "$source" "$link" | while read eplink
-		 do record-episode "$programme" "$eplink" "$custom_parser"
-		done | while read receps
-		 do
-			[ -z "$neweps" ] && echo -n "${programme}" && neweps="y"
-			echo -n " $receps"
-		done
-	done
-}
-
-
 ############
 # AUTOMAATTITALLENTAJA
 
@@ -696,16 +681,21 @@ function recording-worker {
 	for recorder in "${vhs}"/*"${vhsext}"
 	 do
 		programme="$( basename "$recorder" ${vhsext} )"
-		regex_def="$( sed 1q "$recorder" )"
+		regex="$( sed 1q "$recorder" )"
 		sed 1d "$recorder" >"$custom_parser"
 
-		if [ -n "${regex_def}" ]
-		 then
-			tr '|' '\n' <<<"${regex_def}" | while read regex
-			 do record-regex "$regex" "$programme" "$custom_parser"
+		if [ -n "${regex}" ]
+		 then query-sourced-programmes "${regex}"
+		 else query-sourced-programmes "^$( escape-regex <<<"$programme" )$"
+		fi | while read source link title
+		 do
+			query-programme-episodes "$source" "$link" | while read eplink
+			 do record-episode "$programme" "$eplink" "$custom_parser"
+			done | while read receps
+			 do [ -z "$neweps" ] && echo -n "${programme} " && neweps="y"
+				[ -n "$receps" ] && echo -n "$receps "
 			done
-		 else record-regex "^$( escape-regex <<<"$programme" )$" "$programme" "$custom_parser"
-		fi | tee "${tmp}/record-output.txt"
+		done | tee "${tmp}/record-output.txt"
 
 		[ -s "${tmp}/record-output.txt" ] && echo
 		rm "${tmp}/record-output.txt"
@@ -717,31 +707,27 @@ function recording-worker {
 # OPASTUS
 
 function print-cmds {
-	echo " p <regex>           - listaa saatavilla olevat ohjelmat <tai hae lausekkeella>"
-	echo " e [regex]           - hae saatavilla olevien jaksojen määrä ohjelmittain"
-	echo " l [regex]           - listaa saatavilla olevat jaksot ohjelmittain"
-	echo " r [regex]           - tallenna kaikki jaksot hakulausekkeella ohjelman mukaan"
-	echo " s [regex]           - valitse ja tallenna jaksoja hakulausekkeella"
-	echo " v <regex>           - listaa asetetut tallentimet <tai hae lausekkeella>"
-	echo " a [regex] <ohjelma> - lisää tallennin hakulausekkeella <nimetylle ohjelmalle>"
-	echo " d [regex]           - poista kaikki hakulauseketta vastaavat tallentimet"
-	echo " i                   - komentotulkkitila (suorita peräkkäin useita komentoja)"
-	echo " q                   - poistu komentotulkkitilasta"
+	echo " p <regex> - listaa kaikki saatavilla olevat ohjelmat <tai hae lausekkeella>"
+	echo " e regex   - näytä saatavilla olevien jaksojen määrä"
+	echo " l regex   - listaa saatavilla olevien jaksojen tiedot"
+	echo " r regex   - tallenna kaikki saatavilla olevat jaksot"
+	echo " s regex   - valitse ja tallenna halutut jaksot"
+	echo " v <regex> - listaa kaikki asetetut tallentimet <tai hae lausekkeella>"
+	echo " a regex   - aseta tallennusajastimia"
+	echo " d regex   - poista tallennusajastimia"
+	echo " i         - komentotulkkitila: suorita useita komentoja"
+	echo " q         - poistu komentotulkkitilasta"
 }
 
 function print-help {
-	echo
 	echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
 	echo
-	echo "- tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo ja TV5"
+	echo "Tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo ja TV5"
 	echo
-	echo "Käyttö: $0 <komento> <parametrit>"
-	echo
+	echo "Käytössä ovat seuraavat komennot, joissa 'regex' viittaa ohjelman nimeen :"
 	print-cmds
 	echo
-	echo "- parametrit [hakasuluissa] ovat pakollisia, <väkäsuluissa> valinnaisia"
 	echo "Suoritus ilman parametrejä toteuttaa komennolla \"a\" asetetut tallennukset"
-	echo
 }
 
 
@@ -749,15 +735,19 @@ function print-help {
 # KOMENTOTULKKI
 
 function interpret {
-	[ -n "$1" ] && case "$1" in
+	cmd="$1"
+	shift
+	[ -n "$cmd" ] || return 0
+
+	case "$cmd" in
 	 p|prog)
-		query-sourced-programmes "$2" | while read source link title
+		query-sourced-programmes "$*" | while read source link title
 		 do
 			printf "%11s %s\n" "[$source]" "$( remove-rating <<<"$title" )"
 		done
 		;;
 	 e|ep)
-		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
+		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
 		 do
 			episodes="$( query-programme-episodes "$source" "$link" | wc -l )"
 			printf "%11s %s : %d jakso" "[$source]" "$( remove-rating <<<"$title" )" "$episodes"
@@ -766,7 +756,7 @@ function interpret {
 		done
 		;;
 	 l|list)
-		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
+		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
 		 do
 			remove-rating <<<"$title"
 			query-programme-episodes "$source" "$link" | while read eplink
@@ -775,7 +765,7 @@ function interpret {
 		done
 		;;
 	 r|rec)
-		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
+		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
 		 do
 			programme="$( remove-rating <<<"$title" )"
 			query-programme-episodes "$source" "$link" | while read eplink
@@ -787,7 +777,7 @@ function interpret {
 		;;
 	 s|select)
 		exec 3<&0
-		[ -n "$2" ] && query-sourced-programmes "$2" | while read source link title
+		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
 		 do
 			programme="$( remove-rating <<<"$title" )"
 			echo "${programme}"
@@ -809,39 +799,31 @@ function interpret {
 		done
 		exec 3<&-
 		;;
-	 v|vhs)
+	 /|v|vhs)
 		echo "Aktiiviset tallentimet:"
 		echo "-----------------------"
 		for recorder in "${vhs}"/*"${vhsext}"
 		 do
 			programme="$( basename "${recorder}" "${vhsext}" )"
-			[ -n "$2" ] && ! [[ "$programme" =~ $2 ]] && continue
+			[ -n "$*" ] && ! match-any-regex "$programme" <<<"$*" && continue
 			echo -n "${programme} "
 			[ -n "$( sed 1q "$recorder" )" ] && echo -n "($( sed 1q "$recorder" ))"
 			[ -n "$( sed 1d "$recorder" )" ] && echo -n "*"
 			echo
 		done
 		;;
-	 a|add)
-		regex="$2"
-	 	if [ -n "$3" ]
-		 then
-			programme="$3"
-			echo "$regex" > "${vhs}/${programme}${vhsext}" && echo "+ ${vhs}/${programme}${vhsext} (${regex})"
-		elif [ -n "$regex" ]
-		 then
-			query-sourced-programmes "$regex" | while read source link title
-			 do
-				recorder="${vhs}/$( remove-rating <<<"$title" )${vhsext}"
-				touch "${recorder}" && echo "+ ${recorder}"
-			done
-		fi
+	 +|a|add)
+		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		 do
+			recorder="${vhs}/$( remove-rating <<<"$title" )${vhsext}"
+			touch "${recorder}" && echo "+ ${recorder}"
+		done
 		;;
-	 d|del)
-		[ -n "$2" ] && for recorder in "${vhs}"/*"${vhsext}"
+	 -|d|del)
+		[ -n "$*" ] && for recorder in "${vhs}"/*"${vhsext}"
 		 do
 			programme="$( basename "${recorder}" "${vhsext}" )"
-			[[ "$programme" =~ $2 ]] && rm "${recorder}" && echo "- ${recorder}"
+			match-any-regex "$programme" <<<"$*" && rm "${recorder}" && echo "- ${recorder}"
 		done
 		;;
 	 i|interactive)
