@@ -479,13 +479,13 @@ function katsomo-worker {
 	# hae jakson nimi sekä kauden ja jakson numero www.katsomo.fi-sivun kautta
 	html_metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
-	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
 	snno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Kkv][au][uo]si[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
 	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 | dec-html )"
 
+	episode="$( get-xml-content //Playback/MatchId <<<"$metadata" )"
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
 	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playback/AgeRating <<<"$metadata" )"
