@@ -408,7 +408,12 @@ function ruutu-episodes {
 }
 function ruutu-episode-string {
 	link="$1"
-	cached-get "${OSX_agent}" "${link}" | dec-html | sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p'
+	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
+	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
+	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 | dec-html )"
+	episode="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
+	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
+	echo "${episode} ${desc}"
 }
 function ruutu-worker {
 	link="$1"
@@ -467,7 +472,7 @@ function katsomo-episode-string {
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
 	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 | dec-html )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
-	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
+	episode="$( get-xml-content //Playback/MatchId <<<"$metadata" )"
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
 	echo "Osa ${epno}: ${episode} ${desc}"
 }
@@ -476,7 +481,7 @@ function katsomo-worker {
 	programme="$2"
 	custom_parser="$3"
 
-	# hae jakson nimi sekä kauden ja jakson numero www.katsomo.fi-sivun kautta
+	# hae kauden ja jakson numero www.katsomo.fi-sivun kautta
 	html_metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
 	snno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Kkv][au][uo]si[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
