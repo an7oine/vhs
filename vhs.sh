@@ -333,7 +333,7 @@ function areena-episode-string {
 	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
 	desc="$( sed -n 's/.*title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" )"
 	title="$( sed -n 's/.*title: *'\''\([^'\'']*\) *'\'',.*/\1/p' <<<"$metadata" )"
-	echo "Osa ${epno}: ${title} ${desc}"
+	echo "Osa ${epno}: ${title}. ${desc}"
 }
 function areena-worker {
     link="$1"
@@ -413,7 +413,7 @@ function ruutu-episode-string {
 	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 | dec-html )"
 	episode="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
 	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
-	echo "${episode} ${desc}"
+	echo "${episode}. ${desc}"
 }
 function ruutu-worker {
 	link="$1"
@@ -464,17 +464,17 @@ function katsomo-episodes {
 	# suodatetaan pois maksulliset (muut kuin "play-link") jaksot
 	curl -L -s "http://www.katsomo.fi/?treeId=${link}" |\
 	iconv -f ISO-8859-1 |\
-	sed -n 's#.*<a href="\(/?progId=[^"]*\)".*class="play-link".*>.*#http://m.katsomo.fi\1#p'
+	sed -n 's#.*<a href="\(/?progId=[^"]*\)".*class="play-link".*>.*#http://www.katsomo.fi\1#p'
 }
 function katsomo-episode-string {
 	link="$1"
-	html_metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" | iconv -f ISO-8859-1 |\
+	html_metadata="$( cached-get "${OSX_agent}" "${link}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
-	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "${link/\?/sumo/sl/playback.do?}" | iconv -f ISO-8859-1 | dec-html )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 	episode="$( get-xml-content //Playback/MatchId <<<"$metadata" )"
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
-	echo "Osa ${epno}: ${episode} ${desc}"
+	echo "Osa ${epno}: ${episode}. ${desc}"
 }
 function katsomo-worker {
 	link="$1"
@@ -482,13 +482,13 @@ function katsomo-worker {
 	custom_parser="$3"
 
 	# hae kauden ja jakson numero www.katsomo.fi-sivun kautta
-	html_metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/}" | iconv -f ISO-8859-1 |\
+	html_metadata="$( cached-get "${OSX_agent}" "${link}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
 	snno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Kkv][au][uo]si[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
-	metadata="$( cached-get "${OSX_agent}" "${link/m.katsomo.fi\//www.katsomo.fi/sumo/sl/playback.do}" | iconv -f ISO-8859-1 | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "${link/\?/sumo/sl/playback.do?}" | iconv -f ISO-8859-1 | dec-html )"
 
 	episode="$( get-xml-content //Playback/MatchId <<<"$metadata" )"
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
@@ -508,8 +508,8 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	 else subtitles=""
 	fi
 
-	# poistu jos videolinkkiä ei löydy
-	source="$( curl -L -s -A "${iOS_agent}" "${link}" |\
+	# hae videolinkki Mobiilikatsomosta, poistu jos linkkiä ei löydy
+	source="$( curl -L -s -A "${iOS_agent}" "${link/www.katsomo.fi\//m.katsomo.fi/}" |\
 sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' |\
 sed 's#HLS[A-Z]#HLSH#' )"
 	[ -n "$source" ] || return 10
@@ -549,7 +549,7 @@ function tv5-episode-string {
 	metadata="$( cached-get "${OSX_agent}" "${link}" | sed -n '/<meta.*\/>/ p; /jwplayer('\''video'\'').setup/ p' )"
 	epno="$( sed -n 's#.*<meta property="og:title" content=".*, osa \([0-9]*\)".*#\1#p' <<<"$metadata" )"
 	desc="$( sed -n 's#.*<meta property="og:description" content="\([^"]*\)".*#\1#p' <<<"$metadata" )"
-	echo "Osa ${epno}: ${desc}"
+	echo "Osa ${epno}. ${desc}"
 }
 function tv5-worker {
 	link="$1"
@@ -637,7 +637,7 @@ function unified-episode-string {
 	case "$( sed 's#http://\([^/]*\).*#\1#' <<<"$link" )" in
 	 areena.yle.fi) areena-episode-string "$@" ;;
 	 www.ruutu.fi) ruutu-episode-string "$@" ;;
-	 m.katsomo.fi) katsomo-episode-string "$@" ;;
+	 www.katsomo.fi) katsomo-episode-string "$@" ;;
 	 tv5.fi) tv5-episode-string "$@" ;;
 	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
 	esac
@@ -648,7 +648,7 @@ function unified-worker {
 	case "$( sed 's#http://\([^/]*\).*#\1#' <<<"$link" )" in
 	 areena.yle.fi) areena-worker "$@" ;;
 	 www.ruutu.fi) ruutu-worker "$@" ;;
-	 m.katsomo.fi) katsomo-worker "$@" ;;
+	 www.katsomo.fi) katsomo-worker "$@" ;;
 	 tv5.fi) tv5-worker "$@" ;;
 	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
 	esac
