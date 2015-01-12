@@ -53,12 +53,14 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 # ULKOISET APUOHJELMAT
 
 function check-version {
+	local current_version minimum_version
 	current_version=$1
 	minimum_version=$2
 	[ "$( echo $current_version$'\n'$minimum_version |sort -g |head -n1 )" = $minimum_version ]
 }
 
 function dependencies {
+	local deps
 	deps="$( (
 	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
 	which php &>/dev/null || echo -n "php "
@@ -83,6 +85,7 @@ function dependencies {
 # SISÄISET APUOHJELMAT (VAKIOSYÖTE-VAKIOTULOSTE)
 
 function remove-rating {
+	local programme_withrating
 	read programme_withrating
 	echo "${programme_withrating%% (+([SK[:digit:]]))}"
 }
@@ -90,6 +93,7 @@ function escape-regex {
 	sed 's/[(){}\[^]/\\&/g; s/]/\\&/g'
 }
 function match-any-regex {
+	local programme regex
 	programme="$1"
 	tr '|' '\n' | while read regex
 	 do [[ "$programme" =~ $regex ]] && break
@@ -100,11 +104,13 @@ function dec-html {
 	php -R 'echo html_entity_decode($argn, ENT_QUOTES)."\n";'
 }
 function get-xml-field {
+	local path field
 	path="$1"
 	field="$2"
 	xpath "$path" 2>/dev/null | sed 's#.*'"$field"'="\([^"]*\)".*#\1#'
 }
 function get-xml-content {
+	local path
 	path="$1"
 	xpath "$path" 2>/dev/null | sed 's/<[^<]*>//g'
 }
@@ -118,6 +124,7 @@ function ttml-to-srt {
 #g'
 }
 function txtime-to-epoch {
+	local txtime
 	read txtime
 	[ -n "$txtime" ] || return
 	if [ "$( uname )" = "Darwin" ]
@@ -126,6 +133,7 @@ function txtime-to-epoch {
 	fi
 }
 function epoch-to-utc {
+	local epoch
 	read epoch
 	[ -n "$epoch" ] || return
 	if [ "$( uname )" = "Darwin" ]
@@ -134,6 +142,7 @@ function epoch-to-utc {
 	fi
 }
 function epoch-to-touch {
+	local epoch
 	read epoch
 	[ -n "$epoch" ] || return
 	if [ "$( uname )" = "Darwin" ]
@@ -142,6 +151,7 @@ function epoch-to-touch {
 	fi
 }
 function tv-rating {
+	local age
 	read age
 	age="${age//[A-Za-z]}"
 	[ -n "$age" ] || return
@@ -153,6 +163,7 @@ function tv-rating {
 	fi
 }
 function movie-rating {
+	local age
 	read age
 	age="${age//[A-Za-z]}"
 	[ -n "$age" ] || return
@@ -183,6 +194,7 @@ function season-number {
 # TALLENNUKSEN APURUTIINIT
 
 function cached-get {
+	local user_agent url cache
 	user_agent="$1"
 	url="$2"
 
@@ -192,6 +204,7 @@ function cached-get {
 	curl -L -s -A "${user_agent}" "${url}" | tee "$cache"
 }
 function segment-downloader {
+	local prefix postfix begin seg
 	prefix="$1"
 	postfix="$2"
 	begin="$3"
@@ -208,6 +221,7 @@ function segment-downloader {
 	done
 }
 function meta-worker {
+	local input subtitles output out_ext hdvideo
 	input="$1"
 	subtitles="$2"
 
@@ -321,6 +335,7 @@ function areena-programmes {
 	sed -n '/<a.*href="http:\/\/areena.yle.fi\/radio\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/radio/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-r \1 \2#p'
 }
 function areena-episodes {
+	local type link
 	type="$1" # "tv" tai "radio"
 	link="$2"
 	# vain yhden jakson sisältävät ohjelmalinkit (elokuvat tai konsertit) toimivat jakson linkkeinä sellaisenaan, tällöin search.rss-sivua ei löydy
@@ -329,6 +344,7 @@ function areena-episodes {
 	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${type}/${link}"
 }
 function areena-episode-string {
+	local link metadata epno desc title
 	link="$1"
 	metadata="$( cached-get "${OSX_agent}" "${link}" )"
 	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
@@ -337,6 +353,7 @@ function areena-episode-string {
 	echo "Osa ${epno}: ${title}. ${desc}"
 }
 function areena-worker {
+	local link programme custom_parser metadata areena_clipid type desc epno snno epoch agelimit thumb product album title audio_recode subtitles
     link="$1"
     programme="$2"
 	custom_parser="$3"
@@ -400,6 +417,7 @@ function ruutu-programmes {
 	sed -n 's#.*<a.*href="/ohjelmat/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
+	local link
 	link="$1"
 	# suodatetaan pois jaksot, joiden kuvauksessa (19 riviä ennen linkkiä) mainitaan 'ruutuplus'
 	curl -L -s "http://www.ruutu.fi/ohjelmat/${link}" |\
@@ -407,6 +425,7 @@ function ruutu-episodes {
 	sed -n 's#.*<a href="\(/ohjelmat/'"${link}"'/[^?"]*\)">.*#http://www.ruutu.fi\1#p'
 }
 function ruutu-episode-string {
+	local link html_metadata epid metadata episode desc
 	link="$1"
 	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
@@ -416,6 +435,7 @@ function ruutu-episode-string {
 	echo "${episode}. ${desc}"
 }
 function ruutu-worker {
+	local link programme custom_parser html_metadata og_title epno snno episode epid metadata source desc agelimit thumb subtitles
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -460,6 +480,7 @@ function katsomo-programmes {
 	sed -n 's#.*<a.*href="http://www.katsomo.fi/?treeId=\([^"]*\)".*>\([^<]\{1,\}\)<.*#katsomo \1 \2#p'
 }
 function katsomo-episodes {
+	local link
 	link="$1"
 	# suodatetaan pois maksulliset (muut kuin "play-link") jaksot
 	curl -L -s "http://www.katsomo.fi/?treeId=${link}" |\
@@ -467,6 +488,7 @@ function katsomo-episodes {
 	sed -n 's#.*<a href="\(/?progId=[^"]*\)".*class="play-link".*>.*#http://www.katsomo.fi\1#p'
 }
 function katsomo-episode-string {
+	local link html_metadata metadata epno episode desc
 	link="$1"
 	html_metadata="$( cached-get "${OSX_agent}" "${link}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
@@ -477,6 +499,7 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	echo "Osa ${epno}: ${episode}. ${desc}"
 }
 function katsomo-worker {
+	local link programme custom_parser html_metadata snno epno metadata episode desc epoch agelimit thumb sublink subtitles source
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -535,6 +558,7 @@ function tv5-programmes {
 	sed -n 's#.*<a href="/nettitv/\([^/"]*\)/.*">\([^<]*\)</a>.*#tv5 \1 \2#p' |sed 's/, osa [0-9]*//'
 }
 function tv5-episodes {
+	local link eplink
 	link="$1"
 	# suodatetaan pois jaksot, jotka eivät (enää) ole katsottavissa
 	curl -L -s "http://tv5.fi/nettitv/${link}" |\
@@ -545,6 +569,7 @@ function tv5-episodes {
 	done
 }
 function tv5-episode-string {
+	local link metadata epno desc
 	link="$1"
 	metadata="$( cached-get "${OSX_agent}" "${link}" | sed -n '/<meta.*\/>/ p; /jwplayer('\''video'\'').setup/ p' )"
 	epno="$( sed -n 's#.*<meta property="og:title" content=".*, osa \([0-9]*\)".*#\1#p' <<<"$metadata" )"
@@ -552,6 +577,7 @@ function tv5-episode-string {
 	echo "Osa ${epno}. ${desc}"
 }
 function tv5-worker {
+	local link programme custom_parser metadata epno desc direct_mp4 thumb master_m3u8 postfix prefix subtitles
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -596,6 +622,7 @@ function tv5-worker {
 
 # ohjelmalistaus ladataan verkosta vain kerran ja tallennetaan ajokohtaiseen välimuistitiedostoon
 function sorted-programmes {
+	local cache
 	cache="${tmp}/cache/programmes.txt"
 	cat "${cache}" 2>/dev/null && return 0
 	[ -d "${tmp}/cache" ] || return 1
@@ -605,6 +632,7 @@ function sorted-programmes {
 	tee "${cache}"
 }
 function query-sourced-programmes {
+	local regex source link title
     regex="$1"
 
 	sorted-programmes | while read source link title
@@ -614,6 +642,7 @@ function query-sourced-programmes {
 	done
 }
 function query-programme-episodes {
+	local source link cache
 	source="$1"
 	link="$2"
 
@@ -632,6 +661,7 @@ function query-programme-episodes {
 	esac | awk '!x[$0]++' | tee "${cache}"
 }
 function unified-episode-string {
+	local link
 	link="$1"
 
 	case "$( sed 's#http://\([^/]*\).*#\1#' <<<"$link" )" in
@@ -643,6 +673,7 @@ function unified-episode-string {
 	esac
 }
 function unified-worker {
+	local link
 	link="$1"
 
 	case "$( sed 's#http://\([^/]*\).*#\1#' <<<"$link" )" in
@@ -659,6 +690,7 @@ function unified-worker {
 # JAKSON TALLENNUS, VIRHEIDEN KÄSITTELY JA TIETOKANNAN YLLÄPITO
 
 function record-episode {
+	local programme eplink custom_parser clipid donefile
 	programme="$1"
 	eplink="$2"
 	custom_parser="$3"
@@ -693,6 +725,7 @@ function record-episode {
 # AUTOMAATTITALLENTAJA
 
 function recording-worker {
+	local custom_parser recorder programme regex source link title eplink receps neweps
 	custom_parser="${tmp}/custom-parser.sh"
 	
 	for recorder in "${vhs}"/*"${vhsext}"
@@ -752,6 +785,7 @@ function print-help {
 # KOMENTOTULKKI
 
 function interpret {
+	local cmd source link title episodes eplink programme receps indices recorder cmdline
 	cmd="$1"
 	shift
 	[ -n "$cmd" ] || return 0
