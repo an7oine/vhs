@@ -164,17 +164,18 @@ function movie-rating {
 	fi
 }
 function season-number {
+	local description_text r
 	read description_text
-	( [ -n "$( sed -n 's#.*\([0-9]\{1,\}\)[.]* [tuotanto]*kau[sdt].*#\1#p' <<<"$description_text" | tee /dev/stderr )" ] 2>&1 ) && return 0
-	[ -n "$( grep '[Ee]nsimmäi[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 1 && return 0
-	[ -n "$( grep '[Tt]oi[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 2 && return 0
-	[ -n "$( grep '[Kk]olma[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 3 && return 0
-	[ -n "$( grep '[Nn]eljä[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 4 && return 0
-	[ -n "$( grep '[Vv]iide[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 5 && return 0
-	[ -n "$( grep '[Kk]uude[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 6 && return 0
-	[ -n "$( grep '[Ss]eitsemä[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 7 && return 0
-	[ -n "$( grep '[Kk]ahdeksa[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 8 && return 0
-	[ -n "$( grep '[Yy]hdeksä[^ ]* [tuotanto]*kau[sdt]' <<<"$description_text" )" ] && echo 9 && return 0
+	r='([0-9]{1,})[.]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo ${BASH_REMATCH[1]} && return 0
+	r='ensimmäi[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 1 && return 0
+	r='toi[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 2 && return 0
+	r='kolma[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 3 && return 0
+	r='neljä[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 4 && return 0
+	r='viide[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 5 && return 0
+	r='kuude[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 6 && return 0
+	r='seitsemä[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 7 && return 0
+	r='kahdeksa[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 8 && return 0
+	r='yhdeksä[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 9 && return 0
 }
 
 
@@ -351,6 +352,7 @@ function areena-worker {
 	agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*<div id="areena_player" class="wrapper main player"  style="background-image: url(\(http://.*.jpg\));">.*#\1#p' <<<"$metadata" )"
+	[ -n "${thumb}" ] || thumb="$( sed -n 's#.*<meta property="og:image" content="\(http://.*\)_[0-9]*.jpg" />.*#\1_720.jpg#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	if [ "$type" = "audio" ]
@@ -368,10 +370,7 @@ function areena-worker {
 	 else product="${tmp}/vhs.m4v"
 	fi
 
-	# yritetään parsia kauden numero kuvaustekstistä muotoa "(Jakso/Yhteensä. Jakson nimi. )Kuvaus Kauden-numero. kausi"
-	IFS=% read desc snno <<<"$( sed 's#\(.*\) \([0-9]*\)[.] kausi[.].*#\1%\2#' <<<"$desc" )"
-
-	# yritetään tulkita sanallisesti ilmaistu kauden numero
+	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
 	[ -n "$snno" ] || snno="$( season-number <<<"$desc" )"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
@@ -496,7 +495,7 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	agelimit="$( get-xml-content //Playback/AgeRating <<<"$metadata" )"
 
 	# jos jakson nimenä on pelkkä ohjelman nimi, kirjaa lähetysaika jakson nimeksi
-	[[ "$episode" =~ "$programme" ]] && episode="$( epoch-to-touch )"
+	[[ "$episode" =~ "$programme" ]] && episode="$( epoch-to-touch <<<"$epoch" )"
 
 	thumb="$( get-xml-content //Playback/ImageUrl <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
