@@ -349,6 +349,8 @@ function areena-worker {
 
 	desc="$( sed -n 's/title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" |sed 's/^[ \t]*//' )"
 	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
+	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
+	snno="$( season-number <<<"$desc" )"
 
 	epoch="$( sed -n '/broadcasted:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" | sed 's#\([0-9]*\)/\([0-9]*\)/\([0-9]*\)#\3.\2.\1#' | txtime-to-epoch )"
 	agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
@@ -371,9 +373,6 @@ function areena-worker {
 		fi
 	 else product="${tmp}/vhs.m4v"
 	fi
-
-	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
-	[ -n "$snno" ] || snno="$( season-number <<<"$desc" )"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
@@ -434,7 +433,7 @@ function ruutu-worker {
 	[ -n "$source" ] || return 10
 
 	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
-	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time<<<"$metadata" | sed 's#$#:00#' | txtime-to-epoch )"
+	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#$#:00#' | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
 
 	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
