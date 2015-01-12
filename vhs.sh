@@ -343,6 +343,8 @@ function areena-worker {
 
 	metadata="$( cached-get "${OSX_agent}" "${link}" )"
 
+	# poimitaan areenan käyttämä sisäinen id-tunnus parsimisskriptien käyttöön
+	areena_clipid="$( sed -n '/AREENA.clip = {/,/}/ s/.*id: '\''\([0-9a-z]*\)'\''.*/\1/p' <<<"$metadata" )"
 	type="$( sed -n '/type:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )" # "audio" tai "video"
 
 	desc="$( sed -n 's/title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" |sed 's/^[ \t]*//' )"
