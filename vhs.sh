@@ -20,6 +20,9 @@ sublang="fin"
 # automaattitallentajien tiedostopääte
 vhsext=".txt"
 
+# montako kertaa kutakin latausta yritetään?
+retries=3
+
 # alkuasetus-, metatiedon asetus- ja viimeistelyskripti
 profile_script="${lib}/profile"
 meta_script="${lib}/meta.sh"
@@ -201,7 +204,7 @@ function cached-get {
 	cache="${tmp}/cache/${url//[^A-Za-z0-9]/-}"
 	cat "$cache" 2>/dev/null && return 0
 
-	curl -L -s -A "${user_agent}" "${url}" | tee "$cache"
+	curl --fail --retry "$retries" -L -s -A "${user_agent}" "${url}" | tee "$cache"
 }
 function segment-downloader {
 	local prefix postfix begin seg
@@ -209,10 +212,10 @@ function segment-downloader {
 	postfix="$2"
 	begin="$3"
 
-	# lataa enintään 10000 videosegmenttiä
+	# lataa enintään 10000 videosegmenttiä (~ 10Gt)
 	for seg in $( seq ${begin} 9999 )
 	 do
-		curl --fail -L -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" || break
+		curl --fail --retry "$retries" -L -N -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" || break
 	done
 }
 function meta-worker {
@@ -325,9 +328,9 @@ function meta-worker {
 # YLE AREENA
 
 function areena-programmes {
-	curl -L -s http://areena.yle.fi/tv/a-o |\
+	curl --fail --retry "$retries" -L -s http://areena.yle.fi/tv/a-o |\
 	sed -n '/<a.*href="http:\/\/areena.yle.fi\/tv\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/tv/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-tv \1 \2#p'
-	curl -L -s http://areena.yle.fi/radio/a-o |\
+	curl --fail --retry "$retries" -L -s http://areena.yle.fi/radio/a-o |\
 	sed -n '/<a.*href="http:\/\/areena.yle.fi\/radio\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/radio/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-r \1 \2#p'
 }
 function areena-episodes {
@@ -335,7 +338,7 @@ function areena-episodes {
 	type="$1" # "tv" tai "radio"
 	link="$2"
 	# vain yhden jakson sisältävät ohjelmalinkit (elokuvat tai konsertit) toimivat jakson linkkeinä sellaisenaan, tällöin search.rss-sivua ei löydy
-	curl -L --fail -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
+	curl --fail -L -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
 	sed -n '/rss/ d; s#.*<link>\(.*\)</link>.*#\1#p'
 	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${type}/${link}"
 }
@@ -370,7 +373,7 @@ function areena-worker {
 
 	thumb="$( sed -n 's#.*<div id="areena_player" class="wrapper main player"  style="background-image: url(\(http://.*.jpg\));">.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] || thumb="$( sed -n 's#.*<meta property="og:image" content="\(http://.*\)_[0-9]*.jpg" />.*#\1_720.jpg#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
@@ -409,14 +412,14 @@ function areena-worker {
 # NELONEN RUUTU
 
 function ruutu-programmes {
-	curl -L -s http://www.ruutu.fi/ohjelmat |\
+	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat |\
 	sed -n 's#.*<a.*href="/ohjelmat/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
 	local link
 	link="$1"
 	# suodatetaan pois jaksot, joiden kuvauksessa (19 riviä ennen linkkiä) mainitaan 'ruutuplus'
-	curl -L -s "http://www.ruutu.fi/ohjelmat/${link}" |\
+	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/ohjelmat/${link}" |\
 	sed '/<div class="ruutuplus">/ { n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;d; }' |\
 	sed -n 's#.*<a href="\(/ohjelmat/'"${link}"'/[^?"]*\)">.*#http://www.ruutu.fi\1#p'
 }
@@ -453,7 +456,7 @@ function ruutu-worker {
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
 
 	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
@@ -471,7 +474,7 @@ function ruutu-worker {
 # MTV KATSOMO
 
 function katsomo-programmes {
-	curl -L -s "http://www.katsomo.fi/#" |\
+	curl --fail --retry "$retries" -L -s "http://www.katsomo.fi/#" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a.*href="http://www.katsomo.fi/?treeId=\([^"]*\)".*>\([^<]\{1,\}\)<.*#katsomo \1 \2#p'
 }
@@ -479,7 +482,7 @@ function katsomo-episodes {
 	local link
 	link="$1"
 	# suodatetaan pois maksulliset (muut kuin "play-link") jaksot
-	curl -L -s "http://www.katsomo.fi/?treeId=${link}" |\
+	curl --fail --retry "$retries" -L -s "http://www.katsomo.fi/?treeId=${link}" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="\(/?progId=[^"]*\)".*class="play-link".*>.*#http://www.katsomo.fi\1#p'
 }
@@ -518,17 +521,17 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	[ "$( remove-rating <<<"$episode" )" != "$programme" ] || unset episode
 
 	thumb="$( get-xml-content //Playback/ImageUrl <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	sublink="$( get-xml-content //Playback/Subtitles/Subtitle <<<"$metadata" | sed 's#.*\(http://[^"]*\)".*#\1#' )"
 	if [ -n "$sublink" ]
 	 then subtitles="${tmp}/vhs.${sublang}.srt"
-		curl -L -s "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
+		curl --fail --retry "$retries" -L -s "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
 	 else subtitles=""
 	fi
 
 	# hae videolinkki Mobiilikatsomosta, poistu jos linkkiä ei löydy
-	source="$( curl -L -s -A "${iOS_agent}" -b "hq=1" "${link/www.katsomo.fi\//m.katsomo.fi/}" |\
+	source="$( curl --fail --retry "$retries" -L -s -A "${iOS_agent}" -b "hq=1" "${link/www.katsomo.fi\//m.katsomo.fi/}" |\
 sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' )"
 	[ -n "$source" ] || return 10
 
@@ -548,7 +551,7 @@ sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.
 # TV5
 
 function tv5-programmes {
-	curl -L -s 'http://tv5.fi/nettitv' |\
+	curl --fail --retry "$retries" -L -s 'http://tv5.fi/nettitv' |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="/nettitv/\([^/"]*\)/.*">\([^<]*\)</a>.*#tv5 \1 \2#p' |sed 's/, osa [0-9]*//'
 }
@@ -556,7 +559,7 @@ function tv5-episodes {
 	local link eplink
 	link="$1"
 	# suodatetaan pois jaksot, jotka eivät (enää) ole katsottavissa
-	curl -L -s "http://tv5.fi/nettitv/${link}" |\
+	curl --fail --retry "$retries" -L -s "http://tv5.fi/nettitv/${link}" |\
 	iconv -f ISO-8859-1 |\
 	sed -n 's#.*<a href="\(/nettitv/'"${link}"'/[^"]*\)".*#http://tv5.fi\1#p' |\
 	while read eplink
@@ -586,7 +589,7 @@ function tv5-worker {
 	direct_mp4="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://[^'\'']*[.]mp4\)'\''.*#\1#p' <<<"$metadata" )"
 
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# julkaisuajankohta ei ole saatavilla, otetaan nykyinen aikaleima
 	epoch="$( date +%s )"
@@ -597,14 +600,14 @@ function tv5-worker {
 	echo
 	
 	# hae ensisijaisesti lähdetiedosto sellaisenaan, yritä sen jälkeen segmentoitua latausta
-	if [ -z "${direct_mp4}" ] || ! curl -L -s -o "${tmp}/vhs.m4v" "${direct_mp4}"
+	if [ -z "${direct_mp4}" ] || ! curl --fail --retry "$retries" -L -N -s -o "${tmp}/vhs.m4v" "${direct_mp4}"
 	 then
 		# nouda master-luettelo eri tarkkuuksia vastaavista soittolistoista
 		master_m3u8="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://.*/master.m3u8\)'\''.*#\1#p' <<<"$metadata" )"
 		[ -n "$master_m3u8" ] || return 10
 
 		# poimi master-luettelon viimeinen (korkeimman tarkkuuden) soittolista
-		postfix="$( curl -L -s "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
+		postfix="$( curl --fail --retry "$retries" -L -s "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
 
 		# hae kaikki videosegmentit (aloittaen 1:stä) ja muunna lennossa mp4-muotoon
 		prefix="${master_m3u8%/master.m3u8}/segment"
