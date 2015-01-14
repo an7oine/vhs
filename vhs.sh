@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3
+script_version=1.3.1
 
 #######
 # ASETUKSET
@@ -67,16 +67,16 @@ function dependencies {
 	deps="$( (
 	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
 	which php &>/dev/null || echo -n "php "
-    which curl &>/dev/null || echo -n "curl "
-    which xpath &>/dev/null || echo -n "xpath "
-    which yle-dl &>/dev/null || echo -n "yle-dl "
-    which MP4Box &>/dev/null || echo -n "gpac "
-    ( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v//p' ) 2.4 ) \
-     || echo -n "rtmpdump-2.4 "
-    ( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
-     || echo -n "ffmpeg-1.2.10 "
-    ( which AtomicParsley &>/dev/null && check-version $( AtomicParsley -version |awk '{print $3}' ) 0.9.5 ) \
-     || echo -n "AtomicParsley-0.9.5 "
+	which curl &>/dev/null || echo -n "curl "
+	which xpath &>/dev/null || echo -n "xpath "
+	which yle-dl &>/dev/null || echo -n "yle-dl "
+	which MP4Box &>/dev/null || echo -n "gpac "
+	( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v//p' ) 2.4 ) \
+	 || echo -n "rtmpdump-2.4 "
+	( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
+	 || echo -n "ffmpeg-1.2.10 "
+	( which AtomicParsley &>/dev/null && check-version $( AtomicParsley -version |awk '{print $3}' ) 0.9.5 ) \
+	 || echo -n "AtomicParsley-0.9.5 "
 	) )"
 	[ -z "$deps" ] && return 0
 	echo "* Puuttuvat apuohjelmat: $deps" >&2
@@ -230,10 +230,10 @@ function meta-worker {
 	 then output="${album} - ${title}"
 	elif [ -n "${episode}" ]
 	 then output="${episode}"
-    elif [ -n "${epno}" ]
+	elif [ -n "${epno}" ]
 	 then output="${programme} - osa ${epno}"
 	 else output="${programme}"
-    fi
+	fi
 	output="${tmp}/${output//\//-}"
 
 	# käytä samaa tarkenninta kuin lähdetiedostossa (m4v tai m4a)
@@ -244,10 +244,10 @@ function meta-worker {
 	[ "$( ffmpeg -i "${input}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] 2>/dev/null && hdvideo=true
 	
 	# lisää tekstitykset jos ne on annettu, muutoin käytä syötettä sellaisenaan
-    if [ -n "$subtitles" ]
-     then MP4Box -add "${subtitles}:lang=${sublang}:hdlr=sbtl" -out "${output}.${out_ext}" "${input}" &>/dev/null || return 2
-     else mv "${input}" "${output}.${out_ext}"
-    fi
+	if [ -n "$subtitles" ]
+	 then MP4Box -add "${subtitles}:lang=${sublang}:hdlr=sbtl" -out "${output}.${out_ext}" "${input}" &>/dev/null || return 2
+	 else mv "${input}" "${output}.${out_ext}"
+	fi
 
 	[ -s "$thumb" ] || thumb="REMOVE_ALL"
 
@@ -285,9 +285,8 @@ function meta-worker {
 --comment "$comment" \
 --overWrite &>/dev/null
 		fi
-	 else
-		# anna metatiedot audiotiedostolle
-		AtomicParsley "${output}.m4a" \
+	 # metatiedot radio-ohjelman mukaisesti
+	 else AtomicParsley "${output}.m4a" \
 --stik value=1 \
 --album "$album" \
 --title "$title" \
@@ -303,7 +302,7 @@ function meta-worker {
 --comment "$comment" \
 --overWrite &>/dev/null
 	fi
-    [ $? -eq 0 ] || return 3
+	[ $? -eq 0 ] || return 3
     
 	# tuo julkaisuajankohta ympäristömuuttujaan ja aseta se tulostiedoston aikaleimaksi
 	export touched_at="$( epoch-to-touch <<<"$epoch" )"
@@ -353,8 +352,8 @@ function areena-episode-string {
 }
 function areena-worker {
 	local link programme custom_parser metadata areena_clipid type desc epno snno epoch agelimit thumb product album title audio_recode subtitles
-    link="$1"
-    programme="$2"
+	link="$1"
+	programme="$2"
 	custom_parser="$3"
 
 	metadata="$( cached-get "${OSX_agent}" "${link}" )"
@@ -385,7 +384,7 @@ function areena-worker {
 		if [ -n "$( ffmpeg -codecs 2>/dev/null |grep libfaac )" ]; then audio_recode="-acodec libfaac"
 		elif [ -n "$( ffmpeg -codecs 2>/dev/null |grep libfdk_aac )" ]; then audio_recode="-acodec libfdk_aac"
 		elif [ -n "$( ffmpeg -codecs 2>/dev/null |grep libvo_aacenc )" ]; then audio_recode="-acodec libvo_aacenc"
-		else echo "* FFmpeg-yhteensopivaa AAC-koodekkia (libfaac/libfdk_aac/libvo_aacenc) ei löydy" >&2; exit 2;
+		 else echo "* FFmpeg-yhteensopivaa AAC-koodekkia (libfaac/libfdk_aac/libvo_aacenc) ei löydy" >&2; exit 2;
 		fi
 	 else product="${tmp}/vhs.m4v"
 	fi
@@ -634,7 +633,7 @@ function sorted-programmes {
 }
 function query-sourced-programmes {
 	local regex source link title
-    regex="$1"
+	regex="$1"
 
 	sorted-programmes | while read source link title
 	 do
