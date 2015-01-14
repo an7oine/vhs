@@ -209,15 +209,10 @@ function segment-downloader {
 	postfix="$2"
 	begin="$3"
 
-	# hae kaikki videosegmentit, lopeta viimeisen ei-tyhjän jälkeen
+	# lataa enintään 10000 videosegmenttiä
 	for seg in $( seq ${begin} 9999 )
 	 do
-		# lataa segmentit mobiiliagentilla (Katsomo)
-		curl -L -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" -o "${tmp}/segment.ts"
-		# hylkää tekstimuotoiset (puuttuvaa videotiedostoa ilmaisevat) dokumentit (TV5)
-		[ -n "$( file "${tmp}/segment.ts" | grep 'HTML document text' )" ] && rm "${tmp}/segment.ts" && break
-		cat "${tmp}/segment.ts" 2>/dev/null || break
-		rm "${tmp}/segment.ts"
+		curl --fail -L -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" || break
 	done
 }
 function meta-worker {
@@ -535,9 +530,8 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	fi
 
 	# hae videolinkki Mobiilikatsomosta, poistu jos linkkiä ei löydy
-	source="$( curl -L -s -A "${iOS_agent}" "${link/www.katsomo.fi\//m.katsomo.fi/}" |\
-sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' |\
-sed 's#HLS[A-Z]#HLSH#' )"
+	source="$( curl -L -s -A "${iOS_agent}" -b "hq=1" "${link/www.katsomo.fi\//m.katsomo.fi/}" |\
+sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' )"
 	[ -n "$source" ] || return 10
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
