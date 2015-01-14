@@ -514,10 +514,8 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playback/AgeRating <<<"$metadata" )"
 
-	# jos jakson nimenä on pelkkä ohjelman nimi, kirjaa lähetysaika jakson nimeksi
-	if [ "$( remove-rating <<<"$episode" )" = "$programme" ]
-	 then episode="$( get-xml-content //Playback/TxTime <<<"$metadata" )"
-	fi
+	# älä kirjaa pelkkää ohjelman nimeä jakson nimeksi
+	[ "$( remove-rating <<<"$episode" )" != "$programme" ] || unset episode
 
 	thumb="$( get-xml-content //Playback/ImageUrl <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
