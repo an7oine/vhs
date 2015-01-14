@@ -307,8 +307,9 @@ function meta-worker {
 	fi
     [ $? -eq 0 ] || return 3
     
-	# aseta julkaisuajankohta tulostiedoston aikaleimaksi
-	touch -t "$( epoch-to-touch <<<"$epoch" )" "${output}.${out_ext}"
+	# tuo julkaisuajankohta ympäristömuuttujaan ja aseta se tulostiedoston aikaleimaksi
+	export touched_at="$( epoch-to-touch <<<"$epoch" )"
+	touch -t "$touched_at" "${output}.${out_ext}"
 
 	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
 	rm "${input}" "${subtitles}" &>/dev/null
@@ -579,7 +580,7 @@ function tv5-episode-string {
 	echo "Osa ${epno}. ${desc}"
 }
 function tv5-worker {
-	local link programme custom_parser metadata epno desc direct_mp4 thumb master_m3u8 postfix prefix subtitles
+	local link programme custom_parser metadata epno desc direct_mp4 thumb epoch master_m3u8 postfix prefix subtitles
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -594,6 +595,9 @@ function tv5-worker {
 
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
+
+	# julkaisuajankohta ei ole saatavilla, otetaan nykyinen aikaleima
+	epoch="$( date +%s )"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
@@ -711,7 +715,7 @@ function record-episode {
 	# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
 	unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
 	case $? in
-	 0) echo "[${clipid}]"; touch "$donefile";;
+	 0) echo "[${clipid}]"; touch -t "$touched_at" "$donefile"; unset touched_at;;
 	 1) echo "(${clipid}: TIEDOSTOVIRHE)" ;;
 	 2) echo "(${clipid}: TEKSTITYSVIRHE)" ;;
 	 3) echo "(${clipid}: METATIETOVIRHE)" ;;
