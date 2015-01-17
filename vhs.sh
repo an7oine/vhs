@@ -110,7 +110,7 @@ function get-xml-field {
 	local path field
 	path="$1"
 	field="$2"
-	xpath "$path" 2>/dev/null | sed 's#.*'"$field"'="\([^"]*\)".*#\1#'
+	xpath "$path" 2>/dev/null | sed -n 's#.*'"${field}"'="\([^"]*\)".*#\1#p'
 }
 function get-xml-content {
 	local path
@@ -303,7 +303,10 @@ function meta-worker {
 --overWrite &>/dev/null
 	fi
 	[ $? -eq 0 ] || return 3
-    
+
+	# jos julkaisuajankohta ei ole saatavilla, otetaan nykyinen aikaleima
+	[ -n "$epoch" ] || epoch="$( date +%s )"
+
 	# tuo julkaisuajankohta ympäristömuuttujaan ja aseta se tulostiedoston aikaleimaksi
 	export touched_at="$( epoch-to-touch <<<"$epoch" )"
 	touch -t "$touched_at" "${output}.${out_ext}"
@@ -451,7 +454,7 @@ function ruutu-worker {
 	[ -n "$source" ] || return 10
 
 	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
-	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#$#:00#' | txtime-to-epoch )"
+	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
 
 	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
@@ -574,7 +577,7 @@ function tv5-episode-string {
 	echo "Osa ${epno}. ${desc}"
 }
 function tv5-worker {
-	local link programme custom_parser metadata epno desc direct_mp4 thumb epoch master_m3u8 postfix prefix subtitles
+	local link programme custom_parser metadata epno desc direct_mp4 thumb master_m3u8 postfix prefix subtitles
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -589,9 +592,6 @@ function tv5-worker {
 
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
-
-	# julkaisuajankohta ei ole saatavilla, otetaan nykyinen aikaleima
-	epoch="$( date +%s )"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
