@@ -55,13 +55,18 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 #######
 # ULKOISET APUOHJELMAT
 
+function sort-versions {
+	if [ "$( uname )" = "Darwin" ]
+	 then sort -g # Mac OS X (numeerinen järjestys)
+	 else sort -V # Linux / Cygwin (versiojärjestys)
+	fi
+}
 function check-version {
 	local current_version minimum_version
 	current_version=$1
 	minimum_version=$2
-	[ "$( echo $current_version$'\n'$minimum_version |sort -g |head -n1 )" = $minimum_version ]
+	[ "$( echo $current_version$'\n'$minimum_version | sort-versions | head -n1 )" = $minimum_version ]
 }
-
 function dependencies {
 	local deps
 	deps="$( (
