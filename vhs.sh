@@ -76,7 +76,7 @@ function dependencies {
 	which xpath &>/dev/null || echo -n "xpath "
 	which yle-dl &>/dev/null || echo -n "yle-dl "
 	which MP4Box &>/dev/null || echo -n "gpac "
-	( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v//p' ) 2.4 ) \
+	( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v\([^ ]*\).*/\1/p' ) 2.4 ) \
 	 || echo -n "rtmpdump-2.4 "
 	( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
 	 || echo -n "ffmpeg-1.2.10 "
