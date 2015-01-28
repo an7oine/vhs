@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3.1
+script_version=1.3.2
 
 #######
 # ASETUKSET
@@ -247,7 +247,7 @@ function meta-worker {
 	# tutki, onko videokuvan pystysuuntainen tarkkuus vähintään 720p ja aseta HD-videomerkintä sen mukaisesti
 	hdvideo=false
 	[ "$( ffmpeg -i "${input}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] 2>/dev/null && hdvideo=true
-	
+
 	# lisää tekstitykset jos ne on annettu, muutoin käytä syötettä sellaisenaan
 	if [ -n "$subtitles" ]
 	 then MP4Box -add "${subtitles}:lang=${sublang}:hdlr=sbtl" -out "${output}.${out_ext}" "${input}" &>/dev/null || return 2
@@ -309,11 +309,8 @@ function meta-worker {
 	fi
 	[ $? -eq 0 ] || return 3
 
-	# jos julkaisuajankohta ei ole saatavilla, otetaan nykyinen aikaleima
-	[ -n "$epoch" ] || epoch="$( date +%s )"
-
 	# tuo julkaisuajankohta ympäristömuuttujaan ja aseta se tulostiedoston aikaleimaksi
-	export touched_at="$( epoch-to-touch <<<"$epoch" )"
+	export touched_at="$( epoch-to-touch <<<"${epoch:-$( date +%s )}" )"
 	touch -t "$touched_at" "${output}.${out_ext}"
 
 	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
@@ -398,20 +395,23 @@ function areena-worker {
 	fi
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
-	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
+	if [ -x "${meta_script}" ]; then . "${meta_script}" || return 100; fi
 	. $custom_parser || return 100
 	echo
 
-	# käytä väliaikaista .flv-tiedostoa
-	yle-dl -q "$link" -o "${tmp}/vhs.flv" &>/dev/null || return 10
-	ffmpeg -i "${tmp}/vhs.flv" -c copy $audio_recode "$product" -y -v quiet || return 20
-	rm "${tmp}/vhs.flv"
+	if ! [ -s "$product" ]
+	 then
+		# käytä väliaikaista .flv-tiedostoa
+		yle-dl -q "$link" -o "${tmp}/vhs.flv" &>/dev/null || return 10
+		ffmpeg -i "${tmp}/vhs.flv" -c copy $audio_recode "$product" -y -v quiet || return 20
+		rm "${tmp}/vhs.flv"
 
-	# ota halutun kieliset tekstit talteen ja poista muut
-	subtitles="$( ls "${tmp}/vhs.${sublang}.srt" 2>/dev/null )"
-	find "${tmp}/" -name vhs.\*.srt -not -name "vhs.${sublang}.srt" -delete
+		# ota halutun kieliset tekstit talteen ja poista muut
+		subtitles="$( ls "${tmp}/vhs.${sublang}.srt" 2>/dev/null )"
+		find "${tmp}/" -name vhs.\*.srt -not -name "vhs.${sublang}.srt" -delete
+	fi
 
-	meta-worker "$product" "${subtitles}"
+	meta-worker "${product}" "${subtitles}"
 }
 
 
@@ -441,7 +441,7 @@ function ruutu-episode-string {
 	echo "${episode}. ${desc}"
 }
 function ruutu-worker {
-	local link programme custom_parser html_metadata og_title epno snno episode epid metadata source desc agelimit thumb subtitles
+	local link programme custom_parser html_metadata og_title epno snno episode epid metadata source desc agelimit thumb product subtitles
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -465,15 +465,20 @@ function ruutu-worker {
 	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
+	product="${tmp}/vhs.m4v"
+
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
-	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
+	if [ -x "${meta_script}" ]; then . "${meta_script}" || return 100; fi
 	. $custom_parser || return 100
 	echo
 
-	# lataa flv-muotoinen aineisto ja muunna lennossa mp4-muotoon
-	rtmpdump --live -r "$source" --quiet -o - |ffmpeg -i - -c copy "${tmp}/vhs.m4v" -y -v quiet || return 20
+	if ! [ -s "$product" ]
+	 then
+		# lataa flv-muotoinen aineisto ja muunna lennossa mp4-muotoon
+		rtmpdump --live -r "$source" --quiet -o - | ffmpeg -i - -c copy "$product" -y -v quiet || return 20
+	fi
 
-	meta-worker "${tmp}/vhs.m4v" "${subtitles}"
+	meta-worker "${product}" "${subtitles}"
 }
 
 
@@ -505,7 +510,7 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	echo "Osa ${epno}: ${episode}. ${desc}"
 }
 function katsomo-worker {
-	local link programme custom_parser html_metadata snno epno metadata episode desc epoch agelimit thumb sublink subtitles source
+	local link programme custom_parser html_metadata snno epno metadata episode desc epoch agelimit thumb product sublink subtitles source
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -519,39 +524,42 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
 	metadata="$( cached-get "${OSX_agent}" "${link/\?/sumo/sl/playback.do?}" | iconv -f ISO-8859-1 | dec-html )"
-
 	episode="${episode:-$( get-xml-content //Playback/MatchId <<<"$metadata" )}"
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
 	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playback/AgeRating <<<"$metadata" )"
+	thumb="$( get-xml-content //Playback/ImageUrl <<<"$metadata" )"
+	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# älä kirjaa pelkkää ohjelman nimeä jakson nimeksi
 	[ "$( remove-rating <<<"$episode" )" != "$programme" ] || unset episode
 
-	thumb="$( get-xml-content //Playback/ImageUrl <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
-
-	sublink="$( get-xml-content //Playback/Subtitles/Subtitle <<<"$metadata" | sed 's#.*\(http://[^"]*\)".*#\1#' )"
-	if [ -n "$sublink" ]
-	 then subtitles="${tmp}/vhs.${sublang}.srt"
-		curl --fail --retry "$retries" -L -s "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
-	 else subtitles=""
-	fi
-
-	# hae videolinkki Mobiilikatsomosta, poistu jos linkkiä ei löydy
-	source="$( curl --fail --retry "$retries" -L -s -A "${iOS_agent}" -b "hq=1" "${link/www.katsomo.fi\//m.katsomo.fi/}" |\
-sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' )"
-	[ -n "$source" ] || return 10
+	product="${tmp}/vhs.m4v"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
-	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
+	if [ -x "${meta_script}" ]; then . "${meta_script}" || return 100; fi
 	. $custom_parser || return 100
 	echo
 
-	# hae kaikki videosegmentit (aloittaen 0:sta) ja muunna lennossa mp4-muotoon
-	segment-downloader "${source}/media_" ".ts" 0 |ffmpeg -i - -c copy -absf aac_adtstoasc "${tmp}/vhs.m4v" -y -v quiet || return 20
+	if ! [ -s "$product" ]
+	 then
+		sublink="$( get-xml-content //Playback/Subtitles/Subtitle <<<"$metadata" | sed 's#.*\(http://[^"]*\)".*#\1#' )"
+		if [ -n "$sublink" ]
+		 then subtitles="${tmp}/vhs.${sublang}.srt"
+			curl --fail --retry "$retries" -L -s "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
+		 else subtitles=""
+		fi
 
-	meta-worker "${tmp}/vhs.m4v" "${subtitles}"
+		# hae videolinkki Mobiilikatsomosta, poistu jos linkkiä ei löydy
+		source="$( curl --fail --retry "$retries" -L -s -A "${iOS_agent}" -b "hq=1" "${link/www.katsomo.fi\//m.katsomo.fi/}" |\
+sed -n 's#.*<source type="video/mp4" src="http://[^.]*[.]\(.*\)/playlist[.]m3u8.*"/>.*#http://median3mobilevod.\1#p' )"
+		[ -n "$source" ] || return 10
+
+		# hae kaikki videosegmentit (aloittaen 0:sta) ja muunna lennossa mp4-muotoon
+		segment-downloader "${source}/media_" ".ts" 0 | ffmpeg -i - -c copy -absf aac_adtstoasc "$product" -y -v quiet || return 20
+	fi
+
+	meta-worker "${product}" "${subtitles}"
 }
 
 
@@ -583,7 +591,7 @@ function tv5-episode-string {
 	echo "Osa ${epno}. ${desc}"
 }
 function tv5-worker {
-	local link programme custom_parser metadata epno desc direct_mp4 thumb master_m3u8 postfix prefix subtitles
+	local link programme custom_parser metadata epno desc direct_mp4 thumb product master_m3u8 postfix prefix subtitles
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -599,27 +607,32 @@ function tv5-worker {
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
+	product="${tmp}/vhs.m4v"
+
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
-	[ -x "${meta_script}" ] && ( . "${meta_script}" || return 100 )
+	if [ -x "${meta_script}" ]; then . "${meta_script}" || return 100; fi
 	. $custom_parser || return 100
 	echo
-	
-	# hae ensisijaisesti lähdetiedosto sellaisenaan, yritä sen jälkeen segmentoitua latausta
-	if [ -z "${direct_mp4}" ] || ! curl --fail --retry "$retries" -L -N -s -o "${tmp}/vhs.m4v" "${direct_mp4}"
+
+	if ! [ -s "$product" ]
 	 then
-		# nouda master-luettelo eri tarkkuuksia vastaavista soittolistoista
-		master_m3u8="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://.*/master.m3u8\)'\''.*#\1#p' <<<"$metadata" )"
-		[ -n "$master_m3u8" ] || return 10
+		# hae ensisijaisesti lähdetiedosto sellaisenaan, yritä sen jälkeen segmentoitua latausta
+		if [ -z "${direct_mp4}" ] || ! curl --fail --retry "$retries" -L -N -s -o "${product}" "${direct_mp4}"
+		 then
+			# nouda master-luettelo eri tarkkuuksia vastaavista soittolistoista
+			master_m3u8="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://.*/master.m3u8\)'\''.*#\1#p' <<<"$metadata" )"
+			[ -n "$master_m3u8" ] || return 10
 
-		# poimi master-luettelon viimeinen (korkeimman tarkkuuden) soittolista
-		postfix="$( curl --fail --retry "$retries" -L -s "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
+			# poimi master-luettelon viimeinen (korkeimman tarkkuuden) soittolista
+			postfix="$( curl --fail --retry "$retries" -L -s "${master_m3u8}" | sed -n 's#.*index\([^/]*\).m3u8$#\1#p' | tail -n 1 ).ts"
 
-		# hae kaikki videosegmentit (aloittaen 1:stä) ja muunna lennossa mp4-muotoon
-		prefix="${master_m3u8%/master.m3u8}/segment"
-		segment-downloader "${prefix}" "${postfix}" 1 |ffmpeg -i - -c copy -absf aac_adtstoasc "${tmp}/vhs.m4v" -y -v quiet || return 20
+			# hae kaikki videosegmentit (aloittaen 1:stä) ja muunna lennossa mp4-muotoon
+			prefix="${master_m3u8%/master.m3u8}/segment"
+			segment-downloader "${prefix}" "${postfix}" 1 | ffmpeg -i - -c copy -absf aac_adtstoasc "${product}" -y -v quiet || return 20
+		fi
 	fi
 
-	meta-worker "${tmp}/vhs.m4v" "${subtitles}"
+	meta-worker "${product}" "${subtitles}"
 }
 
 
