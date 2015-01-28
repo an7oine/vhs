@@ -1,7 +1,8 @@
 vhs.sh
 ======
 
-Bash-skripti kotimaisten internet-mediasisältöjen (Areena, Ruutu, Katsomo, TV5) automaattiseen tallennukseen. Yhteensopiva Linux-, OS X- ja Cygwin-järjestelmien kanssa. Vaatii seuraavat apuohjelmat ja vähimmäisversiot: bash-3.2, php, curl, Perl::XML::xpath, rtmpdump-2.4, yle-dl, ffmpeg-1.2.10, GPAC, AtomicParsley-0.9.5.
+Bash-skripti kotimaisten internet-mediasisältöjen (Areena, Ruutu, Katsomo*, TV5) automaattiseen tallennukseen. Yhteensopiva Linux-, OS X- ja Cygwin-järjestelmien kanssa. Vaatii seuraavat apuohjelmat ja vähimmäisversiot: bash-3.2, php, curl, Perl::XML::xpath, rtmpdump-2.4, yle-dl, ffmpeg-1.2.10, GPAC, AtomicParsley-0.9.5.
+ * vain metatiedon osalta
 
 Tallennukset asetetaan hakemistossa ~/Movies/vhs/, jonne tulee kutakin tallennettavaa ohjelmaa kohden luoda tiedosto nimellä "Sarjan nimi.txt":
 - Tiedoston ensimmäinen rivi voi sisältää säännöllisen lausekkeen (regexp), jolla ohjelmia haetaan ja tallennetaan. TV-sarjan (tai radio-ohjelmissa albumin) nimeksi asetetaan silloinkin txt-tiedoston nimestä poimittu "Sarjan nimi".
@@ -22,6 +23,8 @@ Tallennukset asetetaan hakemistossa ~/Movies/vhs/, jonne tulee kutakin tallennet
 - Tiedosto voi olla myös tyhjä, jolloin nauhoitetaan kaikki jaksot säännöllisellä hakulausekkeella txt-tiedoston nimestä poimitun "Sarjan nimen" mukaan.
 
 Skripti pitää tietokantaa kaikista jo tallennetuista jaksoista hakemistossa ~/.vhs/. Tyhjentämällä tämän kokonaan tai osittain voi pyytää edelleen saatavilla olevien jaksojen tallentamista uudelleen. Käyttäjä voi myös luoda em. hakemistoon tiedoston 'profile' asetusparametrien asettamista varten, tiedoston 'meta.sh' oman metatiedon tuottamiseen nauhoitustiedostoon tallentamista varten sekä tiedoston 'finish.sh' nauhoitustiedostojen loppusijoitusta varten.
+
+Tiedostossa 'meta.sh' on mahdollista myös tuottaa itse tallennusmedia sopivasta ulkoisesta ohjelmalähteestä (vdr, tvheadend tms.). Lopputulos tulee tällöin sijoittaa MP4-muodossa muuttujan $product osoittamaan tiedostoon. MTV Katsomon mobiiliversion sulkeutumisen (1/2015) myötä ulkoinen tallentaminen (lähinnä DVB) on tällä hetkellä ainoa tapa hyödyntää tätä skriptiä MTV:n levittämien ohjelmien tallentamisessa.
 
 Tallennukset tehdään iTunes-yhteensopivaan MP4-muotoon H.264-kuvalla ja AAC-äänellä, parhaalla saatavilla olevalla laadulla ja mahdollisuuksien mukaan ilman uudelleenkoodausta. Internet-lähteistä poimittu ja tiedostoon tallennettu metatieto sekä mahdolliset irralliset tekstitykset (suomeksi) näkyvät sellaisenaan iTunes-kirjastossa ja sen sisältöä toistavissa iOS- ja Apple TV -laitteissa.
 
