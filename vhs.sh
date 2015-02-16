@@ -435,7 +435,7 @@ function ruutu-episode-string {
 	link="$1"
 	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
-	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
 	episode="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
 	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
 	echo "${episode}. ${desc}"
@@ -453,7 +453,7 @@ function ruutu-worker {
 	episode="$( sed -n 's/.* - Kausi [0-9]* - Jakso [0-9]* - \(.*\)/\1/p' <<<"$og_title" )"
 
 	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
-	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
 
 	source="$( get-xml-content //Playerdata/Clip/MediaFiles/MediaFile <<<"$metadata" )"
 	[ -n "$source" ] || return 10
@@ -503,7 +503,7 @@ function katsomo-episode-string {
 	link="$1"
 	html_metadata="$( cached-get "${OSX_agent}" "${link}" | iconv -f ISO-8859-1 |\
 sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="hidden title-hidden">/p' )"
-	metadata="$( cached-get "${OSX_agent}" "${link/\?/sumo/sl/playback.do?}" | iconv -f ISO-8859-1 | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "${link/\?/sumo/sl/playback.do?}" | iconv -f ISO-8859-1 )"
 	epno="$( sed -n '/<div class="season-info" style="display:none;">/ {;n;s#.*[Jj]akso[: ]*\([0-9]*\).*#\1#p;}' <<<"$html_metadata" )"
 	episode="$( get-xml-content //Playback/MatchId <<<"$metadata" )"
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
@@ -523,7 +523,7 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	episode="$( sed -n '2 s#^'$'\t''*##p' <<<"$html_metadata" )"
 
 	# hae muut metatiedot /sumo/sl/playback.do-osoitteen xml-dokumentista
-	metadata="$( cached-get "${OSX_agent}" "${link/\?/sumo/sl/playback.do?}" | iconv -f ISO-8859-1 | dec-html )"
+	metadata="$( cached-get "${OSX_agent}" "${link/\?/sumo/sl/playback.do?}" | iconv -f ISO-8859-1 )"
 	episode="${episode:-$( get-xml-content //Playback/MatchId <<<"$metadata" )}"
 	desc="$( get-xml-content //Playback/Description <<<"$metadata" )"
 	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | txtime-to-epoch )"
