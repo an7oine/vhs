@@ -263,6 +263,7 @@ function meta-worker {
 		 # metatiedot TV-sarjan mukaisesti
 		 then AtomicParsley "${output}.m4v" \
 --stik "TV Show" \
+--title "" \
 --TVShowName "$programme" \
 --TVEpisode "$episode" \
 --TVEpisodeNum "$epno" \
@@ -293,8 +294,8 @@ function meta-worker {
 	 # metatiedot radio-ohjelman mukaisesti
 	 else AtomicParsley "${output}.m4a" \
 --stik value=1 \
---album "$album" \
 --title "$title" \
+--album "$album" \
 --artist "$artist" \
 --albumArtist "$albumArtist" \
 --tracknum "$epno" \
