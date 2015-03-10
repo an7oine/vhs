@@ -730,13 +730,13 @@ function record-episode {
 	unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
 	case $? in
 	 0) echo "[${clipid}]"; touch -t "$touched_at" "$donefile"; unset touched_at;;
-	 1) echo "(${clipid}: TIEDOSTOVIRHE)" ;;
-	 2) echo "(${clipid}: TEKSTITYSVIRHE)" ;;
-	 3) echo "(${clipid}: METATIETOVIRHE)" ;;
-	 10) echo "(${clipid}: EI SAATAVILLA)" ;;
-	 20) echo "(${clipid}: LATAUSVIRHE)" ;;
+	 1) echo "(${clipid}: TIEDOSTOVIRHE)"; rm -f "$donefile";;
+	 2) echo "(${clipid}: TEKSTITYSVIRHE)"; rm -f "$donefile";;
+	 3) echo "(${clipid}: METATIETOVIRHE)"; rm -f "$donefile";;
+	 10) echo "(${clipid}: EI SAATAVILLA)"; rm -f "$donefile";;
+	 20) echo "(${clipid}: LATAUSVIRHE)"; rm -f "$donefile";;
 	 100) ;; # ohitettu, ei virhettä
-	 *) echo "(${clipid}: VIRHE $?)" ;;
+	 *) echo "(${clipid}: VIRHE $?)"; rm -f "$donefile";;
 	esac
 }
 
