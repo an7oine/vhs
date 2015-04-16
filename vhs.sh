@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3.2
+script_version=1.3.3
 
 #######
 # ASETUKSET
@@ -435,11 +435,13 @@ function ruutu-episode-string {
 	local link html_metadata epid metadata episode desc
 	link="$1"
 	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
-	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
-	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
-	episode="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
-	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
-	echo "${episode}. ${desc}"
+	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
+	og_desc="$( sed -n 's#<meta property=\"og:description\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
+	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]*.*/\1/p' <<<"$og_title" )"
+	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\).*/\1/p' <<<"$og_title" )"
+	episode="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] //; s/\([^.!?]*[!?]\{0,1\}\).*/\1/' <<<"$og_desc" )"
+	desc="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] [^.!?]*[.!?] //' <<<"$og_desc" )"
+	echo "Osa ${epno} (kausi ${snno}): ${episode}. ${desc}"
 }
 function ruutu-worker {
 	local link programme custom_parser html_metadata og_title epno snno episode epid metadata source desc agelimit thumb product subtitles
@@ -449,9 +451,11 @@ function ruutu-worker {
 
 	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
-	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\) - .*/\1/p' <<<"$og_title" )"
-	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]* - .*/\1/p' <<<"$og_title" )"
-	episode="$( sed -n 's/.* - Kausi [0-9]* - Jakso [0-9]* - \(.*\)/\1/p' <<<"$og_title" )"
+	og_desc="$( sed -n 's#<meta property=\"og:description\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
+	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]*.*/\1/p' <<<"$og_title" )"
+	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\).*/\1/p' <<<"$og_title" )"
+	episode="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] //; s/\([^.!?]*[!?]\{0,1\}\).*/\1/' <<<"$og_desc" )"
+	desc="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] [^.!?]*[.!?] //' <<<"$og_desc" )"
 
 	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
 	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
@@ -459,7 +463,6 @@ function ruutu-worker {
 	source="$( get-xml-content //Playerdata/Clip/MediaFiles/MediaFile <<<"$metadata" )"
 	[ -n "$source" ] || return 10
 
-	desc="$( get-xml-field //Playerdata/Behavior/Program description <<<"$metadata" )"
 	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
 
