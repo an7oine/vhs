@@ -1,9 +1,9 @@
 vhs.sh
 ======
 
-Bash-skripti kotimaisten internet-mediasisältöjen (Areena, Ruutu, Katsomo¹, TV5) automaattiseen tallennukseen. Yhteensopiva Linux-, OS X- ja Cygwin-järjestelmien kanssa. Vaatii seuraavat apuohjelmat ja vähimmäisversiot: bash-3.2, php, curl, Perl::XML::xpath, rtmpdump-2.4, yle-dl, ffmpeg-1.2.10, GPAC, AtomicParsley-0.9.5.
+Bash-skripti kotimaisten internet-mediasisältöjen (Areena, Ruutu, {Katsomo}¹, TV5) automaattiseen tallennukseen. Yhteensopiva Linux-, OS X- ja Cygwin-järjestelmien kanssa. Vaatii seuraavat apuohjelmat ja vähimmäisversiot: bash-3.2, php, curl, Perl::XML::xpath, rtmpdump-2.4, yle-dl-2.7.0, ffmpeg-1.2.10, GPAC, AtomicParsley-0.9.5.
 
- ¹ vain metatiedon osalta
+ ¹ ei toimi enää Mobiilikatsomon sulkemisen johdosta
 
 Tallennukset asetetaan hakemistossa ~/Movies/vhs/, jonne tulee kutakin tallennettavaa ohjelmaa kohden luoda tiedosto nimellä "Sarjan nimi.txt":
 - Tiedoston ensimmäinen rivi voi sisältää säännöllisen lausekkeen (regexp), jolla ohjelmia haetaan ja tallennetaan. TV-sarjan (tai radio-ohjelmissa albumin) nimeksi asetetaan silloinkin txt-tiedoston nimestä poimittu "Sarjan nimi".
