@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3.3
+script_version=1.3.4
 
 #######
 # ASETUKSET
@@ -74,8 +74,9 @@ function dependencies {
 	which php &>/dev/null || echo -n "php "
 	which curl &>/dev/null || echo -n "curl "
 	which xpath &>/dev/null || echo -n "xpath "
-	which yle-dl &>/dev/null || echo -n "yle-dl "
-	which MP4Box &>/dev/null || echo -n "gpac "
+    which MP4Box &>/dev/null || echo -n "gpac "
+    ( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n 's/^yle-dl \([^:]*\):.*/\1/p' ) 2.7.0 ) \
+     || echo -n "yle-dl-2.7.0 "
 	( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v\([^ ]*\).*/\1/p' ) 2.4 ) \
 	 || echo -n "rtmpdump-2.4 "
 	( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
@@ -209,7 +210,7 @@ function cached-get {
 	cache="${tmp}/cache/${url//[^A-Za-z0-9]/-}"
 	cat "$cache" 2>/dev/null && return 0
 
-	curl --fail --retry "$retries" -L -s -A "${user_agent}" "${url}" | tee "$cache"
+	curl --fail --retry "$retries" --compressed -L -s -A "${user_agent}" "${url}" | tee "$cache"
 }
 function segment-downloader {
 	local prefix postfix begin seg
@@ -334,26 +335,26 @@ function meta-worker {
 
 function areena-programmes {
 	curl --fail --retry "$retries" -L -s http://areena.yle.fi/tv/a-o |\
-	sed -n '/<a.*href="http:\/\/areena.yle.fi\/tv\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/tv/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-tv \1 \2#p'
+	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-tv \1 \2#p'
 	curl --fail --retry "$retries" -L -s http://areena.yle.fi/radio/a-o |\
-	sed -n '/<a.*href="http:\/\/areena.yle.fi\/radio\/[^"]*".*>/ N; s#.*<a.*href="http://areena.yle.fi/radio/\([^"]*\)".*>.*<span class=".*">\([^<]\{1,\}\)</span>.*#areena-r \1 \2#p'
+	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-r \1 \2#p'
 }
 function areena-episodes {
 	local type link
 	type="$1" # "tv" tai "radio"
 	link="$2"
-	# vain yhden jakson sisältävät ohjelmalinkit (elokuvat tai konsertit) toimivat jakson linkkeinä sellaisenaan, tällöin search.rss-sivua ei löydy
-	curl --fail -L -s "http://areena.yle.fi/api/search.rss?id=${link}" |\
-	sed -n '/rss/ d; s#.*<link>\(.*\)</link>.*#\1#p'
-	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${type}/${link}"
+	# ohjelmalinkit elokuviin, konsertteihin yms. toimivat sellaisenaan videolinkkeinä
+    curl --compressed --fail -L -s "http://areena.yle.fi/${link}" |\
+	sed -n 's#.*<a itemprop="url" href="/\([^"]*\)">.*#http://areena.yle.fi/\1#p'
+	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${link}"
 }
 function areena-episode-string {
 	local link metadata epno desc title
 	link="$1"
 	metadata="$( cached-get "${OSX_agent}" "${link}" )"
-	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
-	desc="$( sed -n 's/.*title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" )"
-	title="$( sed -n 's/.*title: *'\''\([^'\'']*\) *'\'',.*/\1/p' <<<"$metadata" )"
+	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
+	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* [^.!?]*[!?]\{0,\}[.]\{0,\} \(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
+	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* \([^.!?]*[!?]\{0,\}\)[.]\{0,\} .*\</p></div>.*#\1#p' <<<"$metadata" )"
 	echo "Osa ${epno}: ${title}. ${desc}"
 }
 function areena-worker {
@@ -364,20 +365,21 @@ function areena-worker {
 
 	metadata="$( cached-get "${OSX_agent}" "${link}" )"
 
-	# poimitaan areenan käyttämä sisäinen id-tunnus parsimisskriptien käyttöön
-	areena_clipid="$( sed -n '/AREENA.clip = {/,/}/ s/.*id: '\''\([0-9a-z]*\)'\''.*/\1/p' <<<"$metadata" )"
-	type="$( sed -n '/type:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )" # "audio" tai "video"
+	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
+	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* [^.!?]*[!?]\{0,\}[.]\{0,\} \(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
+	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* \([^.!?]*[!?]\{0,\}\)[.]\{0,\} .*\</p></div>.*#\1#p' <<<"$metadata" )"
 
-	desc="$( sed -n 's/title:.*desc: '\''\(.*\) *'\'',.*/\1/p' <<<"$metadata" |sed 's/^[ \t]*//' )"
-	epno="$( sed -n '/episodeNumber:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
-	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
-	snno="$( season-number <<<"$desc" )"
+    # yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
+    snno="$( season-number <<<"$desc" )"
 
-	epoch="$( sed -n '/broadcasted:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" | sed 's#\([0-9]*\)/\([0-9]*\)/\([0-9]*\)#\3.\2.\1#' | txtime-to-epoch )"
-	agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
+    type="$( sed -n 's/.*<meta property="og:type" content="\([videoaudio]*\).*">.*/\1/p' <<<"$metadata" )"
+    epoch="$( sed -n 's/.*<meta property="og:.*:release_date" content="\([0-9]*\)-\([0-9]*\)-\([0-9]*\)T\(.*\)[.].*+.*">.*/\3.\2.\1 \4/p' <<<"$metadata" | txtime-to-epoch )"
 
-	thumb="$( sed -n 's#.*<div id="areena_player" class="wrapper main player"  style="background-image: url(\(http://.*.jpg\));">.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] || thumb="$( sed -n 's#.*<meta property="og:image" content="\(http://.*\)_[0-9]*.jpg" />.*#\1_720.jpg#p' <<<"$metadata" )"
+    # (näitä tietoja ei löydy V4:stä?)
+    #areena_clipid="$( sed -n '/AREENA.clip = {/,/}/ s/.*id: '\''\([0-9a-z]*\)'\''.*/\1/p' <<<"$metadata" )"
+    #agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
+
+	thumb="$( sed -n 's#.*<meta property="og:image" content="\(.*\)">.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	if [ "$type" = "audio" ]
