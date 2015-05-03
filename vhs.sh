@@ -353,8 +353,9 @@ function areena-episode-string {
 	link="$1"
 	metadata="$( cached-get "${OSX_agent}" "${link}" )"
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
-	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* [^.!?]*[!?]\{0,\}[.]\{0,\} \(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
-	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* \([^.!?]*[!?]\{0,\}\)[.]\{0,\} .*\</p></div>.*#\1#p' <<<"$metadata" )"
+	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\([^.!?]*[!?]\{0,1\}\).*</p></div>.*#\1#p' <<<"$metadata" )"
+	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" | sed 's/[^.!?]*[.!?] //' )"
+
 	echo "Osa ${epno}: ${title}. ${desc}"
 }
 function areena-worker {
@@ -366,8 +367,8 @@ function areena-worker {
 	metadata="$( cached-get "${OSX_agent}" "${link}" )"
 
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
-	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* [^.!?]*[!?]\{0,\}[.]\{0,\} \(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
-	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/.]* \([^.!?]*[!?]\{0,\}\)[.]\{0,\} .*\</p></div>.*#\1#p' <<<"$metadata" )"
+	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\([^.!?]*[!?]\{0,1\}\).*</p></div>.*#\1#p' <<<"$metadata" )"
+	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" | sed 's/[^.!?]*[.!?] //' )"
 
     # yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
     snno="$( season-number <<<"$desc" )"
