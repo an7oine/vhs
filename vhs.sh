@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3.4
+script_version=1.3.5
 
 #######
 # ASETUKSET
@@ -426,16 +426,16 @@ function areena-worker {
 # NELONEN RUUTU
 
 function ruutu-programmes {
-	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat |\
-	sed -n 's#.*<a.*href="/ohjelmat/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#ruutu \1 \2#p'
+	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
+	sed -n '/href="\/series\//{N;N;N;}; s#.*<a.*href="/series/\([^"]*\)".*>.*<div class="[^"]*">\([^<]\{1,\}\)</div>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
 	local link
 	link="$1"
 	# suodatetaan pois jaksot, joiden kuvauksessa (19 riviä ennen linkkiä) mainitaan 'ruutuplus'
-	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/ohjelmat/${link}" |\
+	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/series/${link}" |\
 	sed '/<div class="ruutuplus">/ { n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;d; }' |\
-	sed -n 's#.*<a href="\(/ohjelmat/'"${link}"'/[^?"]*\)">.*#http://www.ruutu.fi\1#p'
+	sed -n 's#.*<a href="\(/video/[0-9]*\)" itemprop="url">.*#http://www.ruutu.fi\1#p'
 }
 function ruutu-episode-string {
 	local link html_metadata epid metadata episode desc
@@ -463,10 +463,10 @@ function ruutu-worker {
 	episode="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] //; s/\([^.!?]*[!?]\{0,1\}\).*/\1/' <<<"$og_desc" )"
 	desc="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] [^.!?]*[.!?] //' <<<"$og_desc" )"
 
-	epid="$( sed -n 's/.*data-media-id=\"\([0-9]*\)\".*/\1/p' <<<"$html_metadata" )"
+	epid="${link##*/}"
 	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
 
-	source="$( get-xml-content //Playerdata/Clip/MediaFiles/MediaFile <<<"$metadata" )"
+	source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_1000_none.mp4/_3000_none.mp4/' )"
 	[ -n "$source" ] || return 10
 
 	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
@@ -484,8 +484,8 @@ function ruutu-worker {
 
 	if ! [ -s "$product" ]
 	 then
-		# lataa flv-muotoinen aineisto ja muunna lennossa mp4-muotoon
-		rtmpdump --live -r "$source" --quiet -o - | ffmpeg -i - -c copy "$product" -y -v quiet || return 20
+		# lataa mp4-muotoinen aineisto
+        curl --fail --retry "$retries" -L -N -s -o "${product}" "${source}" || return 10
 	fi
 
 	meta-worker "${product}" "${subtitles}"
