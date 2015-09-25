@@ -113,10 +113,9 @@ function dec-html {
 	php -R 'echo html_entity_decode($argn, ENT_QUOTES)."\n";'
 }
 function get-xml-field {
-	local path field
-	path="$1"
-	field="$2"
-	xpath "$path" 2>/dev/null | sed -n 's#.*'"${field}"'="\([^"]*\)".*#\1#p'
+	local path
+	path="${1}/@${2}"
+	xpath "$path" 2>/dev/null | sed 's/[^"]*"\([^"]*\)"/\1 /g'
 }
 function get-xml-content {
 	local path
@@ -432,9 +431,7 @@ function ruutu-programmes {
 function ruutu-episodes {
 	local link
 	link="$1"
-	# suodatetaan pois jaksot, joiden kuvauksessa (19 riviä ennen linkkiä) mainitaan 'ruutuplus'
 	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/series/${link}" |\
-	sed '/<div class="ruutuplus">/ { n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;n;d; }' |\
 	sed -n 's#.*<a href="\(/video/[0-9]*\)" itemprop="url">.*#http://www.ruutu.fi\1#p'
 }
 function ruutu-episode-string {
@@ -466,7 +463,8 @@ function ruutu-worker {
 	epid="${link##*/}"
 	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
 
-	source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_1000_none.mp4/_3000_none.mp4/' )"
+	bitrates="$( get-xml-field //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
+	source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
 	[ -n "$source" ] || return 10
 
 	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
@@ -484,8 +482,12 @@ function ruutu-worker {
 
 	if ! [ -s "$product" ]
 	 then
-		# lataa mp4-muotoinen aineisto
-        curl --fail --retry "$retries" -L -N -s -o "${product}" "${source}" || return 10
+		# lataa mp4-muotoinen aineisto parhaalla saatavissa olevalla laadulla
+		for bitrate in $bitrates x
+         do
+			[ $bitrate != x ] || return 10
+			curl --fail --retry "$retries" -L -N -s -o "${product}" "${source/@@@@/${bitrate}}" && break
+		done
 	fi
 
 	meta-worker "${product}" "${subtitles}"
