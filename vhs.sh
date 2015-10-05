@@ -73,7 +73,7 @@ function dependencies {
 	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
 	which php &>/dev/null || echo -n "php "
 	which curl &>/dev/null || echo -n "curl "
-	which xpath &>/dev/null || echo -n "xpath "
+	which xmllint &>/dev/null || echo -n "xmllint "
 	which MP4Box &>/dev/null || echo -n "gpac "
 	( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n '1 s/^yle-dl \([^:]*\):.*/\1/p' ) 2.7.0 ) \
 	 || echo -n "yle-dl-2.7.0 "
@@ -115,12 +115,12 @@ function dec-html {
 function get-xml-field {
 	local path
 	path="${1}/@${2}"
-	xpath "$path" 2>/dev/null | sed 's/[^"]*"\([^"]*\)"/\1 /g'
+	xmllint --nocdata --xpath "$path" /dev/stdin | sed 's/[^"]*"\([^"]*\)"/\1 /g'
 }
 function get-xml-content {
 	local path
 	path="$1"
-	xpath "$path" 2>/dev/null | sed 's/<[^<]*>//g'
+	xmllint --nocdata --xpath "$path" /dev/stdin | sed 's/<[^<]*>//g'
 }
 function ttml-to-srt {
 	# suodatetaan pelkät tekstit, kukin omalle rivilleen
