@@ -382,7 +382,7 @@ function areena-worker {
 	# hae kansikuva areenasta ja korjaa JPG-tunnistekoodi AtomicParsleyn ymmärtämään muotoon (FF D8 FF E0)
 	thumb="$( sed -n 's#.*<meta property="og:image" content="\(.*\)">.*#\1#p' <<<"$metadata" )"
 	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg.prepatch" "${thumb}" \
-	&& echo -n $'\xFF\xD8\xFF\xE0' > "${tmp}/vhs.jpg" && dd bs=1 skip=4 oseek=4 if="${tmp}/vhs.jpg.prepatch" of="${tmp}/vhs.jpg" &>/dev/null \
+	&& echo -n $'\xFF\xD8\xFF\xE0' > "${tmp}/vhs.jpg" && dd bs=1 skip=4 seek=4 if="${tmp}/vhs.jpg.prepatch" of="${tmp}/vhs.jpg" &>/dev/null \
 	&& thumb="${tmp}/vhs.jpg"
 
 	if [ "$type" = "audio" ]
