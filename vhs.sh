@@ -229,7 +229,9 @@ function meta-worker {
 	subtitles="$2"
 
 	# muodosta tulostiedostolle järkevä nimi
-	if [ -n "${artist}" ]
+	if [ -n "${output_filename}" ]
+	 then output="${output_filename}"
+	elif [ -n "${artist}" ]
 	 then output="${artist} - ${album} - ${title}"
 	elif [ -n "${album}" ]
 	 then output="${album} - ${title}"
@@ -239,6 +241,7 @@ function meta-worker {
 	 then output="${programme} - osa ${epno}"
 	 else output="${programme}"
 	fi
+
 	output="${tmp}/${output//\//-}"
 
 	# käytä samaa tarkenninta kuin lähdetiedostossa (m4v tai m4a)
@@ -334,8 +337,10 @@ function meta-worker {
 
 function areena-programmes {
 	curl --fail --retry "$retries" -L -s http://areena.yle.fi/tv/a-o |\
+	dec-html |\
 	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-tv \1 \2#p'
 	curl --fail --retry "$retries" -L -s http://areena.yle.fi/radio/a-o |\
+	dec-html |\
 	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-r \1 \2#p'
 }
 function areena-episodes {
@@ -343,14 +348,15 @@ function areena-episodes {
 	type="$1" # "tv" tai "radio"
 	link="$2"
 	# ohjelmalinkit elokuviin, konsertteihin yms. toimivat sellaisenaan videolinkkeinä
-    curl --compressed --fail -L -s "http://areena.yle.fi/${link}" |\
+	curl --compressed --fail -L -s "http://areena.yle.fi/${link}" |\
+	dec-html |\
 	sed -n 's#.*<a itemprop="url" href="/\([^"]*\)">.*#http://areena.yle.fi/\1#p'
 	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${link}"
 }
 function areena-episode-string {
 	local link metadata epno desc title
 	link="$1"
-	metadata="$( cached-get "${OSX_agent}" "${link}" )"
+	metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
 	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\([^.!?]*[!?]\{0,1\}\).*</p></div>.*#\1#p' <<<"$metadata" )"
 	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" | sed 's/[^.!?]*[.!?] //' )"
@@ -363,7 +369,7 @@ function areena-worker {
 	programme="$2"
 	custom_parser="$3"
 
-	metadata="$( cached-get "${OSX_agent}" "${link}" )"
+	metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
 	episode="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\([^.!?]*[!?]\{0,1\}\).*</p></div>.*#\1#p' <<<"$metadata" )"
@@ -659,7 +665,7 @@ function sorted-programmes {
 	[ -d "${tmp}/cache" ] || return 1
 
 	( areena-programmes; ruutu-programmes; katsomo-programmes; tv5-programmes ) |\
-	LC_ALL=UTF-8 sort -f -u -t ' ' -k 3 |\
+	LC_ALL=UTF-8 sort -f -t ' ' -k 3 |\
 	tee "${cache}"
 }
 function query-sourced-programmes {
@@ -863,8 +869,9 @@ function interpret {
 		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
 		 do
 			programme="$( remove-rating <<<"$title" )"
+			cache="${tmp}/cache/selecting-episodes.txt"
 			echo "${programme}"
-			query-programme-episodes "$source" "$link" | tee "${tmp}/episodes.txt" | while read eplink
+			query-programme-episodes "$source" "$link" | tee "${cache}" | while read eplink
 			 do unified-episode-string "${eplink}"
 			done | cat -n
 
@@ -874,7 +881,7 @@ function interpret {
 			for i in $( eval echo "$( sed 's/\([0-9]*\)-\([0-9]*\)/{\1..\2}/g' <<<"${indices}" )" )
 			 do
 				if [ "$i" -gt 0 ] 2>/dev/null
-				 then record-episode "$programme" "$( sed -n "$i p" "${tmp}/episodes.txt" )" /dev/null
+				 then record-episode "$programme" "$( sed -n "$i p" "${cache}" )" /dev/null
 				fi
 			done | while read receps
 			 do ( [ -n "$receps" ] && echo -n "$receps " ) || echo -n "..."
