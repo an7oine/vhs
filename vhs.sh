@@ -414,8 +414,8 @@ function areena-worker {
 	if ! [ -s "$product" ]
 	 then
 		# käytä väliaikaista .flv-tiedostoa
-		yle-dl -q "$link" -o "${tmp}/vhs.flv" &>/dev/null || return 10
-		ffmpeg -i "${tmp}/vhs.flv" -c copy $audio_recode "$product" -y -v quiet || return 20
+		yle-dl -q "$link" -o "${tmp}/vhs.flv" &> /dev/fd/6 || return 10
+		ffmpeg -i "${tmp}/vhs.flv" -c copy $audio_recode "$product" -y &> /dev/fd/6 || return 20
 		rm "${tmp}/vhs.flv"
 
 		# ota halutun kieliset tekstit talteen ja poista muut
@@ -423,7 +423,7 @@ function areena-worker {
 		find "${tmp}/" -name vhs.\*.srt -not -name "vhs.${sublang}.srt" -delete
 	fi
 
-	meta-worker "${product}" "${subtitles}"
+	meta-worker "${product}" "${subtitles}" &> /dev/fd/6
 }
 
 
@@ -492,11 +492,11 @@ function ruutu-worker {
 		for bitrate in $bitrates x
          do
 			[ $bitrate != x ] || return 10
-			curl --fail --retry "$retries" -L -N -s -o "${product}" "${source/@@@@/${bitrate}}" && break
+			curl --fail --retry "$retries" -L -N -s -o "${product}" "${source/@@@@/${bitrate}}" &> /dev/fd/6 && break
 		done
 	fi
 
-	meta-worker "${product}" "${subtitles}"
+	meta-worker "${product}" "${subtitles}" &> /dev/fd/6
 }
 
 
@@ -737,6 +737,7 @@ function record-episode {
 	# ota linkin loppuosa jakson tunnisteeksi
 	clipid="${eplink##*[/=]}"
 	donefile="${lib}/${programme}/${clipid}.done"
+	exec 6>"${lib}/${programme}/${clipid}.log"
 
 	# tutki onko jokin tätä tunnistetta vastaava jakso tallennettu jo aiemmin:
 	# - ohita, jos aiemmalla tallenteella ei ole tarkempaa yksilöintitietoa;
