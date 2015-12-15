@@ -493,7 +493,7 @@ function ruutu-worker {
 		for bitrate in $bitrates fallback failed
         	 do
 			if [ $bitrate = fallback ]
-			 then rtmpdump --live -r "$fallback_source" -o - | ffmpeg -i - -c copy "${product}" -y &> /dev/fd/6 && break
+			 then ffmpeg -i "$fallback_source" -bsf:a aac_adtstoasc -c copy "${product}" -y &> /dev/fd/6 && break
 			elif [ $bitrate != failed ]
 			 then curl --fail --retry "$retries" -L -N -s -o "${product}" "${source/@@@@/${bitrate}}" &> /dev/fd/6 && break
 			 else return 10
