@@ -471,7 +471,8 @@ function ruutu-worker {
 
 	bitrates="$( get-xml-field //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
 	source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
-	[ -n "$source" ] || return 10
+	fallback_source="$( get-xml-content //Playerdata/Clip/AppleMediaFiles/AppleMediaFile <<<"$metadata" )"
+	[ -n "$source" -o -n "$fallback_source" ] || return 10
 
 	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
@@ -489,10 +490,14 @@ function ruutu-worker {
 	if ! [ -s "$product" ]
 	 then
 		# lataa mp4-muotoinen aineisto parhaalla saatavissa olevalla laadulla
-		for bitrate in $bitrates x
-         do
-			[ $bitrate != x ] || return 10
-			curl --fail --retry "$retries" -L -N -s -o "${product}" "${source/@@@@/${bitrate}}" &> /dev/fd/6 && break
+		for bitrate in $bitrates fallback failed
+        	 do
+			if [ $bitrate = fallback ]
+			 then rtmpdump --live -r "$fallback_source" -o - | ffmpeg -i - -c copy "${product}" -y &> /dev/fd/6 && break
+			elif [ $bitrate != failed ]
+			 then curl --fail --retry "$retries" -L -N -s -o "${product}" "${source/@@@@/${bitrate}}" &> /dev/fd/6 && break
+			 else return 10
+			fi
 		done
 	fi
 
