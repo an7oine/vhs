@@ -57,7 +57,7 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 
 function sort-versions {
 	if [ "$( uname )" = "Darwin" ]
-	 then sort -g # Mac OS X (numeerinen järjestys)
+	 then sort -t . -g -k1,1 -k2,2 -k3,3 # Mac OS X (numeerinen järjestys kentittäin)
 	 else sort -V # Linux / Cygwin (versiojärjestys)
 	fi
 }
