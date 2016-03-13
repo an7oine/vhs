@@ -432,7 +432,7 @@ function areena-worker {
 
 function ruutu-programmes {
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
-	sed -n '/href="\/series\//{N;N;N;}; s#.*<a.*href="/series/\([^"]*\)".*>.*<div class="[^"]*">\([^<]\{1,\}\)</div>.*#ruutu \1 \2#p'
+	sed -n '/<div class="item-list__item/{N;N;N;N;N;}; s#.*data-content-id="\([^"]*\)".*<div class="[^"]*">\([^<]\{1,\}\)</div>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
 	local link
