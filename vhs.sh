@@ -251,11 +251,12 @@ function meta-worker {
 	hdvideo=false
 	[ "$( ffmpeg -i "${input}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] 2>/dev/null && hdvideo=true
 
-	# lisää tekstitykset jos ne on annettu, muutoin käytä syötettä sellaisenaan
-	if [ -n "$subtitles" ]
-	 then MP4Box -add "${subtitles}:lang=${sublang}:hdlr=sbtl" -out "${output}.${out_ext}" "${input}" &>/dev/null || return 2
-	 else mv "${input}" "${output}.${out_ext}"
-	fi
+	# lisää kaikki olemassa olevat tekstitykset
+	subtracks=()
+	for subfile in ${subtitles}
+	 do subtracks+=(-add "${subfile}:lang=$( sed 's/.*[.]\([^.]*\)[.]srt/\1/' <<<"$subfile" ):hdlr=sbtl")
+	done
+	MP4Box "${subtracks[@]}" -out "${output}.${out_ext}" "${input}" &>/dev/null || return 2
 
 	[ -s "$thumb" ] || thumb="REMOVE_ALL"
 
@@ -318,7 +319,7 @@ function meta-worker {
 	touch -t "$touched_at" "${output}.${out_ext}"
 
 	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
-	rm "${input}" "${subtitles}" &>/dev/null
+	rm "${input}" ${subtitles} &>/dev/null
 	if [ -x "${finish_script}" ]
 	 then . "${finish_script}" "${output}.${out_ext}"
 	fi
@@ -419,8 +420,7 @@ function areena-worker {
 		rm "${tmp}/vhs.flv"
 
 		# ota halutun kieliset tekstit talteen ja poista muut
-		subtitles="$( ls "${tmp}/vhs.${sublang}.srt" 2>/dev/null )"
-		find "${tmp}/" -name vhs.\*.srt -not -name "vhs.${sublang}.srt" -delete
+		subtitles="${tmp}/vhs.*.srt"
 	fi
 
 	meta-worker "${product}" "${subtitles}" &> /dev/fd/6
@@ -568,8 +568,8 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	 then
 		sublink="$( get-xml-content //Playback/Subtitles/Subtitle <<<"$metadata" | sed 's#.*\(http://[^"]*\)".*#\1#' )"
 		if [ -n "$sublink" ]
-		 then subtitles="${tmp}/vhs.${sublang}.srt"
-			curl --fail --retry "$retries" -L -s "${sublink}" | dec-html | ttml-to-srt > "$subtitles"
+		 then subtitles="${tmp}/vhs.*.srt"
+			curl --fail --retry "$retries" -L -s "${sublink}" | dec-html | ttml-to-srt > "${tmp}/vhs.fin.srt"
 		 else subtitles=""
 		fi
 
