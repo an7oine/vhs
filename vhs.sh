@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3.5
+script_version=1.3.6
 
 #######
 # ASETUKSET
@@ -13,9 +13,6 @@ vhs="${HOME}/Movies/vhs"
 
 # valmiit tiedostot sijoitetaan tänne, jos olemassa
 fine="${HOME}/Movies/tunes"
-
-# tekstitykset haetaan tällä kielellä
-sublang="fin"
 
 # automaattitallentajien tiedostopääte
 vhsext=".txt"
@@ -224,7 +221,7 @@ function segment-downloader {
 	done
 }
 function meta-worker {
-	local input subtitles output out_ext hdvideo
+	local input subtitles output out_ext hdvideo subtracks
 	input="$1"
 	subtitles="$2"
 
@@ -568,8 +565,8 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	 then
 		sublink="$( get-xml-content //Playback/Subtitles/Subtitle <<<"$metadata" | sed 's#.*\(http://[^"]*\)".*#\1#' )"
 		if [ -n "$sublink" ]
-		 then subtitles="${tmp}/vhs.*.srt"
-			curl --fail --retry "$retries" -L -s "${sublink}" | dec-html | ttml-to-srt > "${tmp}/vhs.fin.srt"
+		 then subtitles="${tmp}/vhs.fin.srt"
+			curl --fail --retry "$retries" -L -s "${sublink}" | dec-html | ttml-to-srt > "${subtitles}"
 		 else subtitles=""
 		fi
 
