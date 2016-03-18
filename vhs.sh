@@ -246,14 +246,17 @@ function meta-worker {
 
 	# tutki, onko videokuvan pystysuuntainen tarkkuus vähintään 720p ja aseta HD-videomerkintä sen mukaisesti
 	hdvideo=false
-	[ "$( ffmpeg -i "${input}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] 2>/dev/null && hdvideo=true
+	[ "$( ffmpeg -i "${input}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] && hdvideo=true
 
 	# lisää kaikki olemassa olevat tekstitykset
 	subtracks=()
 	for subfile in ${subtitles}
 	 do subtracks+=(-add "${subfile}:lang=$( sed 's/.*[.]\([^.]*\)[.]srt/\1/' <<<"$subfile" ):hdlr=sbtl")
 	done
-	MP4Box "${subtracks[@]}" -out "${output}.${out_ext}" "${input}" &>/dev/null || return 2
+	if [ ${#subtracks[@]} -gt 0 ]
+	 then MP4Box "${subtracks[@]}" -out "${output}.${out_ext}" "${input}" || return 2
+	 else mv "${input}" "${output}.${out_ext}" || return 2
+	fi
 
 	[ -s "$thumb" ] || thumb="REMOVE_ALL"
 
@@ -277,7 +280,7 @@ function meta-worker {
 --artwork "$thumb" \
 --hdvideo "$hdvideo" \
 --comment "$comment" \
---overWrite &>/dev/null
+--overWrite
 		 # metatiedot elokuvan mukaisesti
 		 else AtomicParsley "${output}.m4v" \
 --stik value=9 \
@@ -290,7 +293,7 @@ function meta-worker {
 --artwork "$thumb" \
 --hdvideo "$hdvideo" \
 --comment "$comment" \
---overWrite &>/dev/null
+--overWrite
 		fi
 	 # metatiedot radio-ohjelman mukaisesti
 	 else AtomicParsley "${output}.m4a" \
@@ -307,7 +310,7 @@ function meta-worker {
 --description "$desc" \
 --artwork "$thumb" \
 --comment "$comment" \
---overWrite &>/dev/null
+--overWrite
 	fi
 	[ $? -eq 0 ] || return 3
 
@@ -315,8 +318,8 @@ function meta-worker {
 	export touched_at="$( epoch-to-touch <<<"${epoch:-$( date +%s )}" )"
 	touch -t "$touched_at" "${output}.${out_ext}"
 
-	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos fine- tai ohjelmakohtaiseen hakemistoon
-	rm "${input}" ${subtitles} &>/dev/null
+	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos 'fine'- tai ohjelmakohtaiseen hakemistoon
+	rm "${input}" ${subtitles}
 	if [ -x "${finish_script}" ]
 	 then . "${finish_script}" "${output}.${out_ext}"
 	fi
@@ -348,8 +351,9 @@ function areena-episodes {
 	# ohjelmalinkit elokuviin, konsertteihin yms. toimivat sellaisenaan videolinkkeinä
 	curl --compressed --fail -L -s "http://areena.yle.fi/${link}" |\
 	dec-html |\
-	sed -n 's#.*<a itemprop="url" href="/\([^"]*\)">.*#http://areena.yle.fi/\1#p'
-	[ "${PIPESTATUS[0]}" -eq 0 ] || echo "http://areena.yle.fi/${link}"
+	sed -n 's#.*<a itemprop="url" href="/\([^"]*\)">.*#http://areena.yle.fi/\1#p' |\
+	tee "${tmp}/areena-eps"
+	[ -s "${tmp}/areena-eps" ] || echo "http://areena.yle.fi/${link}"
 }
 function areena-episode-string {
 	local link metadata epno desc title
@@ -416,7 +420,7 @@ function areena-worker {
 		ffmpeg -i "${tmp}/vhs.flv" -c copy $audio_recode "$product" -y &> /dev/fd/6 || return 20
 		rm "${tmp}/vhs.flv"
 
-		# ota halutun kieliset tekstit talteen ja poista muut
+		# ota kaikki tekstitykset talteen
 		subtitles="${tmp}/vhs.*.srt"
 	fi
 
@@ -450,7 +454,7 @@ function ruutu-episode-string {
 	echo "Osa ${epno} (kausi ${snno}): ${episode}. ${desc}"
 }
 function ruutu-worker {
-	local link programme custom_parser html_metadata og_title epno snno episode epid metadata source desc agelimit thumb product subtitles
+	local link programme custom_parser html_metadata og_title epno snno episode epid metadata source desc agelimit thumb product
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -498,7 +502,7 @@ function ruutu-worker {
 		done
 	fi
 
-	meta-worker "${product}" "${subtitles}" &> /dev/fd/6
+	meta-worker "${product}" "" &> /dev/fd/6
 }
 
 
@@ -611,7 +615,7 @@ function tv5-episode-string {
 	echo "Osa ${epno}. ${desc}"
 }
 function tv5-worker {
-	local link programme custom_parser metadata epno desc direct_mp4 thumb product master_m3u8 postfix prefix subtitles
+	local link programme custom_parser metadata epno desc direct_mp4 thumb product master_m3u8 postfix prefix
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
@@ -652,7 +656,7 @@ function tv5-worker {
 		fi
 	fi
 
-	meta-worker "${product}" "${subtitles}"
+	meta-worker "${product}" ""
 }
 
 
