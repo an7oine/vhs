@@ -68,7 +68,8 @@ function dependencies {
 	local deps
 	deps="$( (
 	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
-	which php &>/dev/null || echo -n "php "
+	( which php &>/dev/null && check-version 6.999 $( php -v | sed -n '1 s/^PHP \([^ ]*\) .*/\1/p' ) ) \
+	 || echo -n "php<7.0 "
 	which curl &>/dev/null || echo -n "curl "
 	which xmllint &>/dev/null || echo -n "xmllint "
 	which MP4Box &>/dev/null || echo -n "gpac "
@@ -806,10 +807,11 @@ function print-cmds {
 	echo " l regex   - listaa saatavilla olevien jaksojen tiedot"
 	echo " r regex   - tallenna kaikki saatavilla olevat jaksot"
 	echo " s regex   - valitse ja tallenna halutut jaksot"
+	echo " m regex   - merkitse jaksoja jo tallennetuiksi tai poista näitä merkintöjä"
 	echo " v <regex> - listaa kaikki asetetut tallentimet <tai hae lausekkeella>"
 	echo " a regex   - aseta tallennusajastimia"
 	echo " d regex   - poista tallennusajastimia"
-	echo " i         - komentotulkkitila: suorita useita komentoja"
+	echo " i         - komentotulkkitila: suorita useita komentoja samalla istunnolla"
 	echo " q         - poistu komentotulkkitilasta"
 }
 
@@ -893,6 +895,39 @@ function interpret {
 			done | while read receps
 			 do ( [ -n "$receps" ] && echo -n "$receps " ) || echo -n "..."
 			done && echo
+		done
+		exec 3<&-
+		;;
+	 m|mark)
+		exec 3<&0
+		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		 do
+			programme="$( remove-rating <<<"$title" )"
+			cache="${tmp}/cache/selecting-episodes.txt"
+			echo "${programme}"
+			query-programme-episodes "$source" "$link" | tee "${cache}" | while read eplink
+			 do donefile="${lib}/${programme}/${eplink##*[/=]}.done"
+				unified-episode-string "${eplink}" | ( ( [ -f "${donefile}" ] && sed 's/^/* /' ) || sed 's/^/  /' )
+			done | cat -n
+
+			# luetaan syöte, poistutaan jos tyhjä
+			read -e -p "Aseta tallennetut jaksot: " indices <&3
+			[ -n "$indices" ] || return
+
+			# poistetaan kaikki olemassa olevat done-tiedostot
+			while read eplink
+			 do rm "${lib}/${programme}/${eplink##*[/=]}.done" 2>/dev/null
+			done < "${cache}"
+
+			# laajennetaan merkinnät muotoa '1-5' muotoon '1 2 3 4 5'
+			for i in $( eval echo "$( sed 's/\([0-9]*\)-\([0-9]*\)/{\1..\2}/g' <<<"${indices}" )" )
+			 do
+				if [ "$i" -gt 0 ] 2>/dev/null
+				 then eplink="$( sed -n "$i p" "${cache}" )"
+					mkdir -p "${lib}/${programme}"
+					touch "${lib}/${programme}/${eplink##*[/=]}.done"
+				fi
+			done
 		done
 		exec 3<&-
 		;;
