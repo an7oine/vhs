@@ -113,12 +113,12 @@ function dec-html {
 function get-xml-field {
 	local path
 	path="${1}/@${2}"
-	xmllint --nocdata --xpath "$path" /dev/stdin | sed 's/[^"]*"\([^"]*\)"/\1 /g'
+	xmllint --nocdata --xpath "$path" /dev/stdin 2>/dev/null | sed 's/[^"]*"\([^"]*\)"/\1/g'
 }
 function get-xml-content {
 	local path
 	path="$1"
-	xmllint --nocdata --xpath "$path" /dev/stdin | sed 's/<[^<]*>//g'
+	xmllint --nocdata --xpath "$path" /dev/stdin 2>/dev/null | sed 's/<[^<]*>//g'
 }
 function ttml-to-srt {
 	# suodatetaan pelkät tekstit, kukin omalle rivilleen
@@ -259,6 +259,10 @@ function meta-worker {
 	 else mv "${input}" "${output}.${out_ext}" || return 2
 	fi
 
+	# lataa kansikuva ja korjaa sen FourCC-tunnistekoodi
+	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg.prepatch" "${thumb}" \
+	&& echo -n $'\xFF\xD8\xFF\xE0' > "${tmp}/vhs.jpg" && dd bs=1 skip=4 seek=4 if="${tmp}/vhs.jpg.prepatch" of="${tmp}/vhs.jpg" &>/dev/null \
+	&& thumb="${tmp}/vhs.jpg"
 	[ -s "$thumb" ] || thumb="REMOVE_ALL"
 
 	if [ "${out_ext}" = m4v ]
@@ -388,11 +392,7 @@ function areena-worker {
     #areena_clipid="$( sed -n '/AREENA.clip = {/,/}/ s/.*id: '\''\([0-9a-z]*\)'\''.*/\1/p' <<<"$metadata" )"
     #agelimit="$( sed -n 's#.*class="restriction age-\([0-9]*\) masterTooltip".*#\1#p' <<<"$metadata" )"
 
-	# hae kansikuva areenasta ja korjaa JPG-tunnistekoodi AtomicParsleyn ymmärtämään muotoon (FF D8 FF E0)
 	thumb="$( sed -n 's#.*<meta property="og:image" content="\(.*\)">.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg.prepatch" "${thumb}" \
-	&& echo -n $'\xFF\xD8\xFF\xE0' > "${tmp}/vhs.jpg" && dd bs=1 skip=4 seek=4 if="${tmp}/vhs.jpg.prepatch" of="${tmp}/vhs.jpg" &>/dev/null \
-	&& thumb="${tmp}/vhs.jpg"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
@@ -440,7 +440,7 @@ function ruutu-episodes {
 	local link
 	link="$1"
 	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/series/${link}" |\
-	sed -n 's#.*<a href="\(/video/[0-9]*\)" itemprop="url">.*#http://www.ruutu.fi\1#p'
+	sed -n 's#.*<a href="\(/video/[0-9]*\)".*#http://www.ruutu.fi\1#p'
 }
 function ruutu-episode-string {
 	local link html_metadata epid metadata episode desc
@@ -470,7 +470,7 @@ function ruutu-worker {
 
 	epid="${link##*/}"
 	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
-
+	
 	bitrates="$( get-xml-field //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
 	source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
 	fallback_source="$( get-xml-content //Playerdata/Clip/AppleMediaFiles/AppleMediaFile <<<"$metadata" )"
@@ -478,9 +478,7 @@ function ruutu-worker {
 
 	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
-
 	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	product="${tmp}/vhs.m4v"
 
@@ -554,7 +552,6 @@ sed -n '\#<a class="title" href="/?progId='${link#*/?progId=}'">#,/<span class="
 	epoch="$( get-xml-content //Playback/TxTime <<<"$metadata" | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playback/AgeRating <<<"$metadata" )"
 	thumb="$( get-xml-content //Playback/ImageUrl <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	# älä kirjaa pelkkää ohjelman nimeä jakson nimeksi
 	[ "$( remove-rating <<<"$episode" )" != "$programme" ] || unset episode
@@ -628,9 +625,7 @@ function tv5-worker {
 	desc="$( sed -n 's#.*<meta property="og:description" content="\([^"]*\)".*#\1#p' <<<"$metadata" )"
 
 	direct_mp4="$( sed -n 's#.*jwplayer('\''video'\'').setup.*file: '\''\(http://[^'\'']*[.]mp4\)'\''.*#\1#p' <<<"$metadata" )"
-
 	thumb="$( sed -n 's#.*jwplayer('\''video'\'').setup.*image: '\''\(http://[^'\'']*\)'\''.*#\1#p' <<<"$metadata" )"
-	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg" "${thumb}" && thumb="${tmp}/vhs.jpg"
 
 	product="${tmp}/vhs.m4v"
 
