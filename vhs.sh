@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3.6
+script_version=1.3.7
 
 #######
 # ASETUKSET
@@ -354,9 +354,11 @@ function areena-episodes {
 	type="$1" # "tv" tai "radio"
 	link="$2"
 	# ohjelmalinkit elokuviin, konsertteihin yms. toimivat sellaisenaan videolinkkeinä
-	curl --compressed --fail -L -s "http://areena.yle.fi/${link}" |\
+	curl --compressed --fail -L -s "http://areena.yle.fi/api/search.rss?id=${link#1-}" |\
 	dec-html |\
-	sed -n 's#.*<a itemprop="url" href="/\([^"]*\)">.*#http://areena.yle.fi/\1#p' |\
+	sed 's#</[^>]*>#&'\\$'\n''#g' |\
+	sed -n 's#.*<link>\(.*\)</link>.*#\1#p' |\
+	grep -v "http://areena.yle.fi/${link}" |\
 	tee "${tmp}/areena-eps"
 	[ -s "${tmp}/areena-eps" ] || echo "http://areena.yle.fi/${link}"
 }
@@ -435,12 +437,15 @@ function areena-worker {
 function ruutu-programmes {
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
 	sed -n '/<a href="\/series\/[0-9]*">/{N;N;N;N;N;N;}; s#.*<a href="/series/\([0-9]*\)">.*<div class="list-item-main1 truncate-text">\([^<]*\)</div>.*#ruutu \1 \2#p'
+	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/elokuvat |\
+	sed -n '/<a href="\/video\/[0-9]*">/{N;N;N;N;N;N;N;N;}; s#.*<a href="/video/\([0-9]*\)">.*<h4 class="thumbnail-title">\([^<]*\)</h4>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
 	local link
 	link="$1"
 	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/series/${link}" |\
 	sed -n 's#.*<a href="\(/video/[0-9]*\)".*#http://www.ruutu.fi\1#p'
+	[ ${PIPESTATUS[0]} = 0 ] || echo "http://www.ruutu.fi/video/${link}"
 }
 function ruutu-episode-string {
 	local link html_metadata epid metadata episode desc
@@ -471,10 +476,10 @@ function ruutu-worker {
 	epid="${link##*/}"
 	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
 	
-	bitrates="$( get-xml-field //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
-	source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
-	fallback_source="$( get-xml-content //Playerdata/Clip/AppleMediaFiles/AppleMediaFile <<<"$metadata" )"
-	[ -n "$source" -o -n "$fallback_source" ] || return 10
+	#bitrates="$( get-xml-field //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
+	#source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
+	m3u8_source="$( get-xml-content //Playerdata/Clip/AppleMediaFiles/AppleMediaFile <<<"$metadata" )"
+	#[ -n "$source" -o -n "$m3u8_source" ] || return 10
 
 	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
 	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
@@ -487,18 +492,12 @@ function ruutu-worker {
 	. $custom_parser || return 100
 	echo
 
-	if ! [ -s "$product" ]
+	if ! [ -s "${product}" ]
 	 then
-		# lataa mp4-muotoinen aineisto parhaalla saatavissa olevalla laadulla
-		for bitrate in $bitrates fallback failed
-        	 do
-			if [ $bitrate = fallback ]
-			 then ffmpeg -i "$fallback_source" -bsf:a aac_adtstoasc -c copy "${product}" -y &> /dev/fd/6 && break
-			elif [ $bitrate != failed ]
-			 then curl --fail --retry "$retries" -L -N -s -o "${product}" "${source/@@@@/${bitrate}}" &> /dev/fd/6 && break
-			 else return 10
-			fi
-		done
+		# lataa m3u8-muotoinen aineisto
+		ffmpeg -i "${m3u8_source}" -bsf:a aac_adtstoasc -c copy -map 0:4 -map 0:5 -y "${tmp}/presync.m4v" &> /dev/fd/6 || return 10
+		# siirrä ääniraitaa eteenpäin 3 ruutua (0,12 s)
+		ffmpeg -i "${tmp}/presync.m4v" -itsoffset 0.120 -i "${tmp}/presync.m4v" -c copy -map 0:0 -map 1:1 -y "${product}" &> /dev/fd/6 || return 20
 	fi
 
 	meta-worker "${product}" "" &> /dev/fd/6
