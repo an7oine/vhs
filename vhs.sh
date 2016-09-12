@@ -436,15 +436,15 @@ function areena-worker {
 
 function ruutu-programmes {
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
-	sed -n '/<a href="\/series\/[0-9]*">/{N;N;N;N;N;N;}; s#.*<a href="/series/\([0-9]*\)">.*<div class="list-item-main1 truncate-text">\([^<]*\)</div>.*#ruutu \1 \2#p'
+	sed -n '/<a href="\/series\/[0-9]*">/{N;N;N;N;N;N;s#.*<a href="/\(series/[0-9]*\)">.*<div class="list-item-main1 truncate-text">\([^<]*\)</div>.*#ruutu \1 \2#p;}; /<a href="\/ohjelmat\/[^"]*">/{N;N;N;N;N;N;s#.*<a href="/\(ohjelmat/[^"]*\)">.*<div class="list-item-main1 truncate-text">\([^<]*\)</div>.*#ruutu \1 \2#p;};'
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/elokuvat |\
-	sed -n '/<a href="\/video\/[0-9]*">/{N;N;N;N;N;N;N;N;}; s#.*<a href="/video/\([0-9]*\)">.*<h4 class="thumbnail-title">\([^<]*\)</h4>.*#ruutu \1 \2#p'
+	sed -n '/<a href="\/video\/[0-9]*">/{N;N;N;N;N;N;N;N;}; s#.*<a href="/\(video/[0-9]*\)">.*<h4 class="thumbnail-title">\([^<]*\)</h4>.*#ruutu \1 \2#p'
 }
 function ruutu-episodes {
 	local link
 	link="$1"
-	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/series/${link}" |\
-	sed -n 's#.*<a href="\(/video/[0-9]*\)".*#http://www.ruutu.fi\1#p'
+	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/${link}" |\
+	sed -n 's#.*<a href="/\(video/[0-9]*\)".*#http://www.ruutu.fi/\1#p'
 	[ ${PIPESTATUS[0]} = 0 ] || echo "http://www.ruutu.fi/video/${link}"
 }
 function ruutu-episode-string {
