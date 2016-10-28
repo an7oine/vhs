@@ -443,9 +443,11 @@ function ruutu-programmes {
 function ruutu-episodes {
 	local link
 	link="$1"
-	curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/${link}" |\
-	sed -n 's#.*<a href="/\(video/[0-9]*\)".*#http://www.ruutu.fi/\1#p'
-	[ ${PIPESTATUS[0]} = 0 ] || echo "http://www.ruutu.fi/video/${link}"
+	( curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/${link}" || echo "http://www.ruutu.fi/video/${link}" )|\
+	sed -n 's#.*data-content-id="\([0-9]*\)".*#\1#p' |\
+	while read ep
+	 do [ -n "$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${ep}" | dec-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
+	done
 }
 function ruutu-episode-string {
 	local link html_metadata epid metadata episode desc
