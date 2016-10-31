@@ -344,23 +344,33 @@ function meta-worker {
 function areena-programmes {
 	curl --fail --retry "$retries" -L -s http://areena.yle.fi/tv/a-o |\
 	dec-html |\
-	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-tv \1 \2#p'
+	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-fi-tv \1 \2#p'
+
+	curl --fail --retry "$retries" -L -s http://arenan.yle.fi/tv/a-o |\
+	dec-html |\
+	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-se-tv \1 \2#p'
+
 	curl --fail --retry "$retries" -L -s http://areena.yle.fi/radio/a-o |\
 	dec-html |\
-	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-r \1 \2#p'
+	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-fi-r \1 \2#p'
+
+	curl --fail --retry "$retries" -L -s http://arenan.yle.fi/radio/a-o |\
+	dec-html |\
+	sed -n 's#.*<a.*href="/\([^"]*\)".*>\([^<]\{1,\}\)</a>.*#areena-se-r \1 \2#p'
 }
 function areena-episodes {
-	local type link
-	type="$1" # "tv" tai "radio"
-	link="$2"
+	local lang type link server
+	base="$1" # "areena" tai "arenan"
+	type="$2" # "tv" tai "radio"
+	link="$3"
 	# ohjelmalinkit elokuviin, konsertteihin yms. toimivat sellaisenaan videolinkkeinä
-	curl --compressed --fail -L -s "http://areena.yle.fi/api/search.rss?id=${link#1-}" |\
+	curl --compressed --fail -L -s "http://${base}.yle.fi/api/search.rss?id=${link#1-}" |\
 	dec-html |\
 	sed 's#</[^>]*>#&'\\$'\n''#g' |\
 	sed -n 's#.*<link>\(.*\)</link>.*#\1#p' |\
-	grep -v "http://areena.yle.fi/${link}" |\
+	grep -v "http://${base}.yle.fi/${link}" |\
 	tee "${tmp}/areena-eps"
-	[ -s "${tmp}/areena-eps" ] || echo "http://areena.yle.fi/${link}"
+	[ -s "${tmp}/areena-eps" ] || echo "http://${base}.yle.fi/${link}"
 }
 function areena-episode-string {
 	local link metadata epno desc title
@@ -691,8 +701,10 @@ function query-programme-episodes {
 	[ -d "${tmp}/cache" ] || return 1
 
 	case $source in
-	 areena-tv) areena-episodes tv "$link" ;;
-	 areena-r) areena-episodes radio "$link" ;;
+	 areena-fi-tv) areena-episodes areena tv "$link" ;;
+	 areena-fi-r) areena-episodes areena radio "$link" ;;
+	 areena-se-tv) areena-episodes arenan tv "$link" ;;
+	 areena-se-r) areena-episodes arenan radio "$link" ;;
 	 ruutu) ruutu-episodes "$link" ;;
 	 katsomo) katsomo-episodes "$link" ;;
 	 tv5) tv5-episodes "$link" ;;
@@ -704,10 +716,10 @@ function unified-episode-string {
 	local link
 	link="$1"
 
-	case "$( sed 's#http://\([^/]*\).*#\1#' <<<"$link" )" in
-	 areena.yle.fi) areena-episode-string "$@" ;;
-	 www.ruutu.fi) ruutu-episode-string "$@" ;;
-	 www.katsomo.fi) katsomo-episode-string "$@" ;;
+	case "$( sed 's#http://[^.]*.\([^/]*\).*#\1#' <<<"$link" )" in
+	 yle.fi) areena-episode-string "$@" ;;
+	 ruutu.fi) ruutu-episode-string "$@" ;;
+	 katsomo.fi) katsomo-episode-string "$@" ;;
 	 tv5.fi) tv5-episode-string "$@" ;;
 	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
 	esac
@@ -716,10 +728,10 @@ function unified-worker {
 	local link
 	link="$1"
 
-	case "$( sed 's#http://\([^/]*\).*#\1#' <<<"$link" )" in
-	 areena.yle.fi) areena-worker "$@" ;;
-	 www.ruutu.fi) ruutu-worker "$@" ;;
-	 www.katsomo.fi) katsomo-worker "$@" ;;
+	case "$( sed 's#http://[^.]*.\([^/]*\).*#\1#' <<<"$link" )" in
+	 yle.fi) areena-worker "$@" ;;
+	 ruutu.fi) ruutu-worker "$@" ;;
+	 katsomo.fi) katsomo-worker "$@" ;;
 	 tv5.fi) tv5-worker "$@" ;;
 	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
 	esac
