@@ -259,11 +259,11 @@ function meta-worker {
 	 else mv "${input}" "${output}.${out_ext}" || return 2
 	fi
 
-	# lataa kansikuva ja korjaa sen FourCC-tunnistekoodi
-	[ -n "${thumb}" ] && curl --fail --retry "$retries" -L -s -o "${tmp}/vhs.jpg.prepatch" "${thumb}" \
-	&& echo -n $'\xFF\xD8\xFF\xE0' > "${tmp}/vhs.jpg" && dd bs=1 skip=4 seek=4 if="${tmp}/vhs.jpg.prepatch" of="${tmp}/vhs.jpg" &>/dev/null \
-	&& thumb="${tmp}/vhs.jpg"
-	[ -s "$thumb" ] || thumb="REMOVE_ALL"
+	# lataa kansikuva
+	[ -n "${thumb}" ] \
+	&& curl --fail --retry "$retries" -L -s -o "${tmp}/vhs-thumb" "${thumb}" \
+	&& thumb="${tmp}/vhs-thumb" \
+	&& [ -s "${thumb}" ] || thumb="REMOVE_ALL"
 
 	if [ "${out_ext}" = m4v ]
 	 then
@@ -446,18 +446,22 @@ function areena-worker {
 
 function ruutu-programmes {
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
-	sed -n '/<a href="\/series\/[0-9]*">/{N;N;N;N;N;N;s#.*<a href="/\(series/[0-9]*\)">.*<div class="list-item-main1 truncate-text">\([^<]*\)</div>.*#ruutu \1 \2#p;}; /<a href="\/ohjelmat\/[^"]*">/{N;N;N;N;N;N;s#.*<a href="/\(ohjelmat/[^"]*\)">.*<div class="list-item-main1 truncate-text">\([^<]*\)</div>.*#ruutu \1 \2#p;};'
+	sed -n '\#<a href="/[^/]*/[^/]*"># {N;N;N;N;N;N;s#.*<a href="/\([^/"]*/[^/"]*\)">.*<div class="list-item-main1">\([^<]*\)</div>.*#ruutu-sarja \1 \2#p;}'
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/elokuvat |\
-	sed -n '/<a href="\/video\/[0-9]*">/{N;N;N;N;N;N;N;N;}; s#.*<a href="/\(video/[0-9]*\)">.*<h4 class="thumbnail-title">\([^<]*\)</h4>.*#ruutu \1 \2#p'
+	sed -n '/<a href="\/video\/[0-9]*">/{N;N;N;N;N;N;N;N;}; s#.*<a href="/\(video/[0-9]*\)">.*<h4 class="thumbnail-title">\([^<]*\)</h4>.*#ruutu-elokuva \1 \2#p'
 }
 function ruutu-episodes {
-	local link
-	link="$1"
-	( curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/${link}" || echo "http://www.ruutu.fi/video/${link}" )|\
-	sed -n 's#.*data-content-id="\([0-9]*\)".*#\1#p' |\
-	while read ep
-	 do [ -n "$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${ep}" | dec-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
-	done
+	local type link
+	type="$1"
+	link="$2"
+	if [ "$type" = "sarja" ]
+	 then curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/${link}" |\
+		sed -n 's#.*data-video-id="\([0-9]\{1,\}\)".*#\1#p' |\
+		while read ep
+		 do [ -n "$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${ep}" | dec-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
+		done
+	 else echo "http://www.ruutu.fi/${link}"
+	fi
 }
 function ruutu-episode-string {
 	local link html_metadata epid metadata episode desc
@@ -679,6 +683,7 @@ function sorted-programmes {
 
 	( areena-programmes; ruutu-programmes; katsomo-programmes; tv5-programmes ) |\
 	LC_ALL=UTF-8 sort -f -t ' ' -k 3 |\
+	awk '!_[$2]++' |\
 	tee "${cache}"
 }
 function query-sourced-programmes {
@@ -705,7 +710,8 @@ function query-programme-episodes {
 	 areena-fi-r) areena-episodes areena radio "$link" ;;
 	 areena-se-tv) areena-episodes arenan tv "$link" ;;
 	 areena-se-r) areena-episodes arenan radio "$link" ;;
-	 ruutu) ruutu-episodes "$link" ;;
+	 ruutu-sarja) ruutu-episodes "sarja" "$link" ;;
+	 ruutu-elokuva) ruutu-episodes "elokuva" "$link" ;;
 	 katsomo) katsomo-episodes "$link" ;;
 	 tv5) tv5-episodes "$link" ;;
 	 *) echo "*** OHJELMAVIRHE: source=\"${source}\" ***" >&2; exit -1 ;;
