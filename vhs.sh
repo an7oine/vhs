@@ -683,7 +683,7 @@ function sorted-programmes {
 
 	( areena-programmes; ruutu-programmes; katsomo-programmes; tv5-programmes ) |\
 	LC_ALL=UTF-8 sort -f -t ' ' -k 3 |\
-	awk '!_[$2]++' |\
+	uniq |\
 	tee "${cache}"
 }
 function query-sourced-programmes {
