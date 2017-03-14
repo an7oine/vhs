@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.3.7
+script_version=1.3.8
 
 #######
 # ASETUKSET
@@ -224,7 +224,8 @@ function segment-downloader {
 function meta-worker {
 	local input subtitles output out_ext hdvideo subtracks
 	input="$1"
-	subtitles="$2"
+	shift
+	subtitles=("$@")
 
 	# muodosta tulostiedostolle järkevä nimi
 	if [ -n "${output_filename}" ]
@@ -251,8 +252,8 @@ function meta-worker {
 
 	# lisää kaikki olemassa olevat tekstitykset
 	subtracks=()
-	for subfile in ${subtitles}
-	 do subtracks+=(-add "${subfile}:lang=$( sed 's/.*[.]\([^.]*\)[.]srt/\1/' <<<"$subfile" ):hdlr=sbtl")
+	for subfile in "${subtitles[@]}"
+	 do subtracks+=(-add "${subfile}:lang=$( sed 's/.*[.]\([^.]*\)[.]srt/\1/' <<<"${subfile}" ):hdlr=sbtl")
 	done
 	if [ ${#subtracks[@]} -gt 0 ]
 	 then MP4Box "${subtracks[@]}" -out "${output}.${out_ext}" "${input}" || return 2
@@ -324,7 +325,7 @@ function meta-worker {
 	touch -t "$touched_at" "${output}.${out_ext}"
 
 	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos 'fine'- tai ohjelmakohtaiseen hakemistoon
-	rm "${input}" ${subtitles}
+	rm "${input}" "${subtitles[@]}"
 	if [ -x "${finish_script}" ]
 	 then . "${finish_script}" "${output}.${out_ext}"
 	fi
@@ -434,10 +435,10 @@ function areena-worker {
 		rm "${tmp}/vhs.flv"
 
 		# ota kaikki tekstitykset talteen
-		subtitles="${tmp}/vhs.*.srt"
+		subtitles=(${tmp}/vhs.*.srt)
 	fi
 
-	meta-worker "${product}" "${subtitles}" &> /dev/fd/6
+	meta-worker "${product}" "${subtitles[@]}" &> /dev/fd/6
 }
 
 
@@ -446,9 +447,9 @@ function areena-worker {
 
 function ruutu-programmes {
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
-	sed -n '\#<a href="/[^/]*/[^/]*"># {N;N;N;N;N;N;s#.*<a href="/\([^/"]*/[^/"]*\)">.*<div class="list-item-main1">\([^<]*\)</div>.*#ruutu-sarja \1 \2#p;}'
+	sed -n '\#<a class="[^"]*" href="/[^/]*/[^/]*"># {N;N;N;N;s#.*<a class="[^"]*" href="/\([^/"]*/[^/"]*\)">.*<span class="mdc-list-item__text__primary">. *\([^<]*\) *</span>.*#ruutu-sarja \1 \2#p;}'
 	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/elokuvat |\
-	sed -n '/<a href="\/video\/[0-9]*">/{N;N;N;N;N;N;N;N;}; s#.*<a href="/\(video/[0-9]*\)">.*<h4 class="thumbnail-title">\([^<]*\)</h4>.*#ruutu-elokuva \1 \2#p'
+	sed -n '\#<a class="[^"]*" href="/video/[0-9]*"># {N;N;N;N;N;N;N;s#.*<a class="[^"]*" href="/\(video/[0-9]*\)">.*<h1 class="ruutu-card__title">. *\([^<]*\) *</h1>.*#ruutu-elokuva \1 \2#p;}'
 }
 function ruutu-episodes {
 	local type link
@@ -516,7 +517,7 @@ function ruutu-worker {
 		ffmpeg -i "${tmp}/presync.m4v" -itsoffset 0.120 -i "${tmp}/presync.m4v" -c copy -map 0:0 -map 1:1 -y "${product}" &> /dev/fd/6 || return 20
 	fi
 
-	meta-worker "${product}" "" &> /dev/fd/6
+	meta-worker "${product}" &> /dev/fd/6
 }
 
 
