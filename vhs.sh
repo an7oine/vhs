@@ -241,7 +241,8 @@ function meta-worker {
 	 else output="${programme}"
 	fi
 
-	output="${tmp}/${output//\//-}"
+	# siivoa tiedostonimestä vfat-yhteensopimattomat merkit
+	output="${tmp}/${output//[<>:\"\/\\|?*]/-}"
 
 	# käytä samaa tarkenninta kuin lähdetiedostossa (m4v tai m4a)
 	out_ext="${input##*.}"
@@ -253,7 +254,7 @@ function meta-worker {
 	# lisää kaikki olemassa olevat tekstitykset
 	subtracks=()
 	for subfile in "${subtitles[@]}"
-	 do subtracks+=(-add "${subfile}:lang=$( sed 's/.*[.]\([^.]*\)[.]srt/\1/' <<<"${subfile}" ):hdlr=sbtl")
+	 do subtracks+=(-add "${subfile}:lang=$( sed 's/.*[.]\([^.]*\)[.]srt/\1/' <<<"${subfile}" ):group=2:hdlr=sbtl:tx3g")
 	done
 	if [ ${#subtracks[@]} -gt 0 ]
 	 then MP4Box "${subtracks[@]}" -out "${output}.${out_ext}" "${input}" || return 2
@@ -332,7 +333,9 @@ function meta-worker {
 	if [ -e "${output}.${out_ext}" ]
 	 then if [ -d "${fine}" ]
 		 then mv "${output}.${out_ext}" "${fine}/"
-		 else mkdir -p "${vhs}/${programme}/" && mv "${output}.${out_ext}" "${vhs}/${programme}/"
+		 else
+			outdir="${vhs}/${programme//[<>:\"\/\\|?*]/-}"
+			mkdir -p "${outdir}/" && mv "${output}.${out_ext}" "${outdir}/"
 		fi
 	fi
 	[ $? -eq 0 ] || return 1
@@ -378,10 +381,10 @@ function areena-episode-string {
 	link="$1"
 	metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
-	title="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\([^.!?]*[!?]\{0,1\}\).*</p></div>.*#\1#p' <<<"$metadata" )"
-	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" | sed 's/[^.!?]*[.!?] //' )"
+	episode="$( sed -n 's#.*<h1 itemprop="name"> *\(.*\) *</h1>.*#\1#p' <<<"$metadata" )"
+	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
 
-	echo "Osa ${epno}: ${title}. ${desc}"
+	echo "Osa ${epno}: ${episode}. ${desc}"
 }
 function areena-worker {
 	local link programme custom_parser metadata areena_clipid type desc epno snno epoch agelimit thumb product album title audio_recode subtitles
@@ -392,8 +395,8 @@ function areena-worker {
 	metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
-	episode="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\([^.!?]*[!?]\{0,1\}\).*</p></div>.*#\1#p' <<<"$metadata" )"
-	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" | sed 's/[^.!?]*[.!?] //' )"
+	episode="$( sed -n 's#.*<h1 itemprop="name"> *\(.*\) *</h1>.*#\1#p' <<<"$metadata" )"
+	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
 
     # yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
     snno="$( season-number <<<"$desc" )"
@@ -764,10 +767,12 @@ function record-episode {
 	# tutki onko jokin tätä tunnistetta vastaava jakso tallennettu jo aiemmin:
 	# - ohita, jos aiemmalla tallenteella ei ole tarkempaa yksilöintitietoa;
 	# - muuten annetaan tv-sarjakohtaisen koodin päättää
-	[ -f "$donefile" ] && ! [ -s "$donefile" ] && continue
+	[ -f "$donefile" ] && ! [ -s "$donefile" ] && return 0
 
 	# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
 	unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
+
+	# jos tallennus onnistui, luo '.done', muuten näytä virhekuvaus
 	case $? in
 	 0) echo "[${clipid}]"; touch -t "$touched_at" "$donefile"; unset touched_at;;
 	 1) echo "(${clipid}: TIEDOSTOVIRHE)"; rm -f "$donefile";;
