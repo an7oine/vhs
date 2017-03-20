@@ -184,6 +184,7 @@ function season-number {
 	local description_text r
 	read description_text
 	r='([0-9]{1,})[.]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo ${BASH_REMATCH[1]} && return 0
+	r='[tuotanto]*kausi ([0-9]{1,})'; [[ "$description_text" =~ $r ]] && echo ${BASH_REMATCH[1]} && return 0
 	r='ensimmäi[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 1 && return 0
 	r='toi[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 2 && return 0
 	r='kolma[^ ]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo 3 && return 0
@@ -381,7 +382,7 @@ function areena-episode-string {
 	link="$1"
 	metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
-	episode="$( sed -n 's#.*<h1 itemprop="name"> *\(.*\) *</h1>.*#\1#p' <<<"$metadata" )"
+	episode="$( sed -n 's#.*<h1 itemprop="name"> *\([^<].*[^> ]\) *</h1>.*#\1#p' <<<"$metadata" )"
 	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
 
 	echo "Osa ${epno}: ${episode}. ${desc}"
@@ -395,7 +396,7 @@ function areena-worker {
 	metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
 
 	epno="$( sed -n 's/.*<meta property="og:title" content="Jakso \(.*\) | .*">.*/\1/p' <<<"$metadata" )"
-	episode="$( sed -n 's#.*<h1 itemprop="name"> *\(.*\) *</h1>.*#\1#p' <<<"$metadata" )"
+	episode="$( sed -n 's#.*<h1 itemprop="name"> *\([^<].*[^> ]\) *</h1>.*#\1#p' <<<"$metadata" )"
 	desc="$( sed -n 's#.*<div id="programDetails" itemprop="description"><p>[0-9/. ]*\(.*\)</p></div>.*#\1#p' <<<"$metadata" )"
 
     # yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
