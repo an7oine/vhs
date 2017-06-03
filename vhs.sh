@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.4
+script_version=1.4.1
 
 #######
 # ASETUKSET
@@ -482,7 +482,7 @@ function ruutu-episodes {
 	link="$2"
 	if [ "$type" = "sarja" ]
 	 then curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/${link}" |\
-		sed -n 's#.*data-video-id="\([0-9]\{1,\}\)".*#\1#p' |\
+		sed -n 's#.*"/video/\([0-9]\{1,\}\)".*#\1#p' |\
 		while read ep
 		 do [ -n "$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${ep}" | dec-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
 		done
