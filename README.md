@@ -1,9 +1,7 @@
 vhs.sh
 ======
 
-Bash-skripti kotimaisten internet-mediasisältöjen (Areena, Ruutu, {Katsomo}¹, TV5) automaattiseen tallennukseen. Yhteensopiva Linux-, OS X- ja Cygwin-järjestelmien kanssa. Vaatii seuraavat apuohjelmat ja vähimmäisversiot: bash-3.2, php, curl, Perl::XML::xpath, rtmpdump-2.4, yle-dl-2.7.0, ffmpeg-1.2.10, GPAC, AtomicParsley-0.9.5.
-
- ¹ ei toimi enää Mobiilikatsomon sulkemisen johdosta
+Bash-skripti kotimaisten internet-mediasisältöjen (Areena, Ruutu) automaattiseen tallennukseen. Yhteensopiva Linux-, OS X- ja Cygwin-järjestelmien kanss. Vaatii seuraavat apuohjelmat ja vähimmäisversi: bash-3.2, php, curl, xmllint, jq, youtube-dl, rtmpdump-2.4, yle-dl-2.17, ffmpeg-1.2.10, GPAC, AtomicParsley-0.9.5.
 
 Tallennukset asetetaan hakemistossa ~/Movies/vhs/, jonne tulee kutakin tallennettavaa ohjelmaa kohden luoda tiedosto nimellä "Sarjan nimi.txt":
 - Tiedoston ensimmäinen rivi voi sisältää säännöllisen lausekkeen (regexp), jolla ohjelmia haetaan ja tallennetaan. TV-sarjan (tai radio-ohjelmissa albumin) nimeksi asetetaan silloinkin txt-tiedoston nimestä poimittu "Sarjan nimi".
@@ -25,7 +23,7 @@ Tallennukset asetetaan hakemistossa ~/Movies/vhs/, jonne tulee kutakin tallennet
 
 Skripti pitää tietokantaa kaikista jo tallennetuista jaksoista hakemistossa ~/.vhs/. Tyhjentämällä tämän kokonaan tai osittain voi pyytää edelleen saatavilla olevien jaksojen tallentamista uudelleen. Käyttäjä voi myös luoda em. hakemistoon tiedoston 'profile' asetusparametrien asettamista varten, tiedoston 'meta.sh' oman metatiedon tuottamiseen nauhoitustiedostoon tallentamista varten sekä tiedoston 'finish.sh' nauhoitustiedostojen loppusijoitusta varten.
 
-Tiedostossa 'meta.sh' on mahdollista myös tuottaa itse tallennusmedia sopivasta ulkoisesta ohjelmalähteestä (vdr, tvheadend tms.). Lopputulos tulee tällöin sijoittaa MP4-muodossa muuttujan $product osoittamaan tiedostoon. MTV Katsomon mobiiliversion sulkeutumisen (1/2015) myötä ulkoinen tallentaminen (lähinnä DVB) on tällä hetkellä ainoa tapa hyödyntää tätä skriptiä MTV:n levittämien ohjelmien tallentamisessa.
+Tiedostossa 'meta.sh' on mahdollista myös tuottaa itse tallennusmedia sopivasta ulkoisesta ohjelmalähteestä (vdr, tvheadend tms.). Lopputulos tulee tällöin sijoittaa MP4-muodossa muuttujan $product osoittamaan tiedostoon.
 
 Tallennukset tehdään iTunes-yhteensopivaan MP4-muotoon H.264-kuvalla ja AAC-äänellä, parhaalla saatavilla olevalla laadulla ja mahdollisuuksien mukaan ilman uudelleenkoodausta. Internet-lähteistä poimittu ja tiedostoon tallennettu metatieto sekä mahdolliset irralliset tekstitykset (suomeksi) näkyvät sellaisenaan iTunes-kirjastossa ja sen sisältöä toistavissa iOS- ja Apple TV -laitteissa.
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.4.1
+script_version=1.4.2
 
 #######
 # ASETUKSET
@@ -68,15 +68,14 @@ function dependencies {
 	local deps
 	deps="$( (
 	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
-	( which php &>/dev/null && check-version 6.999 $( php -v | sed -n '1 s/^PHP \([^ ]*\) .*/\1/p' ) ) \
-	 || echo -n "php<7.0 "
+	which php &>/dev/null || echo -n "php "
 	which curl &>/dev/null || echo -n "curl "
 	which xmllint &>/dev/null || echo -n "xmllint "
 	which jq &>/dev/null || echo -n "jq "
 	which MP4Box &>/dev/null || echo -n "gpac "
 	which youtube-dl &>/dev/null || echo -n "youtube-dl "
-	( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n '1 s/^yle-dl \([^:]*\):.*/\1/p' ) 2.7.0 ) \
-	 || echo -n "yle-dl-2.7.0 "
+	( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n '1 s/^yle-dl \([^:]*\):.*/\1/p' ) 2.17 ) \
+	 || echo -n "yle-dl-2.17 "
 	( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v\([^ ]*\).*/\1/p' ) 2.4 ) \
 	 || echo -n "rtmpdump-2.4 "
 	( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
@@ -454,10 +453,9 @@ function areena-worker {
 
 	if ! [ -s "$product" ]
 	 then
-		# käytä väliaikaista .flv-tiedostoa
-		yle-dl -q "${link}" -o "${tmp}/vhs.flv" &> /dev/fd/6 || return 10
-		ffmpeg -i "${tmp}/vhs.flv" -c copy $audio_recode "$product" -y &> /dev/fd/6 || return 20
-		rm "${tmp}/vhs.flv"
+		# lataa suoraan mp4-muotoon
+		yle-dl -q "${link}" -o "${tmp}/vhs.mp4" &> /dev/fd/6 || return 10
+		mv "${tmp}/vhs.mp4" "${product}" || return 20
 
 		# ota kaikki tekstitykset talteen
 		subtitles=(${tmp}/vhs.*.srt)
@@ -540,6 +538,7 @@ function ruutu-worker {
 		ffmpeg -i "${m3u8_source}" -bsf:a aac_adtstoasc -c copy -map 0:4 -map 0:5 -y "${tmp}/presync.m4v" &> /dev/fd/6 || return 10
 		# siirrä ääniraitaa eteenpäin 3 ruutua (0,12 s)
 		ffmpeg -i "${tmp}/presync.m4v" -itsoffset 0.120 -i "${tmp}/presync.m4v" -c copy -map 0:0 -map 1:1 -y "${product}" &> /dev/fd/6 || return 20
+		rm "${tmp}/presync.m4v"
 	fi
 
 	meta-worker "${product}" &> /dev/fd/6
