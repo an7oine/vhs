@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.4.2
+script_version=1.4.3
 
 #######
 # ASETUKSET
@@ -72,7 +72,6 @@ function dependencies {
 	which curl &>/dev/null || echo -n "curl "
 	which xmllint &>/dev/null || echo -n "xmllint "
 	which jq &>/dev/null || echo -n "jq "
-	which MP4Box &>/dev/null || echo -n "gpac "
 	which youtube-dl &>/dev/null || echo -n "youtube-dl "
 	( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n '1 s/^yle-dl \([^:]*\):.*/\1/p' ) 2.17 ) \
 	 || echo -n "yle-dl-2.17 "
@@ -224,10 +223,8 @@ function segment-downloader {
 	done
 }
 function meta-worker {
-	local input subtitles output out_ext hdvideo subtracks
+	local input output out_ext hdvideo subtracks
 	input="$1"
-	shift
-	subtitles=("$@")
 
 	# muodosta tulostiedostolle järkevä nimi
 	if [ -n "${output_filename}" ]
@@ -253,15 +250,8 @@ function meta-worker {
 	hdvideo=false
 	[ "$( ffmpeg -i "${input}" 2>&1 | sed -n '/Video: h264/s/.*[0-9]x\([0-9]\{1,\}\).*/\1/p' )" -ge 720 ] 2>/dev/null && hdvideo=true
 
-	# lisää kaikki olemassa olevat tekstitykset
-	subtracks=()
-	for subfile in "${subtitles[@]}"
-	 do subtracks+=(-add "${subfile}:lang=$( sed 's/.*[.]\([^.]*\)[.]srt/\1/' <<<"${subfile}" ):group=2:hdlr=sbtl:tx3g")
-	done
-	if [ ${#subtracks[@]} -gt 0 ]
-	 then MP4Box "${subtracks[@]}" -out "${output}.${out_ext}" "${input}" || return 2
-	 else mv "${input}" "${output}.${out_ext}" || return 2
-	fi
+	# nimeä tiedosto uudelleen
+	mv "${input}" "${output}.${out_ext}"
 
 	# lataa kansikuva
 	[ -n "${thumb}" ] \
@@ -327,11 +317,11 @@ function meta-worker {
 	export touched_at="$( epoch-to-touch <<<"${epoch:-$( date +%s )}" )"
 	touch -t "$touched_at" "${output}.${out_ext}"
 
-	# poista lähtötiedostot ja aja finish-skripti ja/tai siirrä tulos 'fine'- tai ohjelmakohtaiseen hakemistoon
-	rm "${input}" "${subtitles[@]}"
+	# aja finish-skripti, poista lähtötiedosto ja siirrä tulos 'fine'- tai ohjelmakohtaiseen hakemistoon
 	if [ -x "${finish_script}" ]
 	 then . "${finish_script}" "${output}.${out_ext}"
 	fi
+	rm "${input}"
 	if [ -e "${output}.${out_ext}" ]
 	 then if [ -d "${fine}" ]
 		 then mv "${output}.${out_ext}" "${fine}/"
@@ -404,7 +394,7 @@ function areena-episode-string {
 	fi
 }
 function areena-worker {
-	local lang link programme custom_parser json subtitle desc type releaseDate image agelimit epno episode epoch thumb snno product album title audio_recode subtitles
+	local lang link programme custom_parser json subtitle desc type releaseDate image agelimit epno episode epoch thumb snno product album title audio_recode
 	lang="$1" # "fi" tai "sv"
 	link="$2"
 	programme="$3"
@@ -453,15 +443,28 @@ function areena-worker {
 
 	if ! [ -s "$product" ]
 	 then
-		# lataa suoraan mp4-muotoon
-		yle-dl -q "${link}" -o "${tmp}/vhs.mp4" &> /dev/fd/6 || return 10
-		mv "${tmp}/vhs.mp4" "${product}" || return 20
+		# lataa flv-muotoinen video sekä tekstitykset
+		yle-dl -q "${link}" -o "${tmp}/vhs.flv" &> /dev/fd/6 || return 10
 
-		# ota kaikki tekstitykset talteen
-		subtitles=(${tmp}/vhs.*.srt)
+		# muodosta ffmpeg-komento, joka muuntaa videon mp4-muotoon ja lisää siihen suomen- ja ruotsinkieliset tekstit, jos saatavilla
+		FFMPEG_0=("-i" "${tmp}/vhs.flv")
+		FFMPEG_1=("-map" "0" "-c:v" "copy" "-c:a" "aac" "-b:a" "128k" "-c:s" "mov_text")
+		if [ -f "${tmp}/vhs.fin.srt" ]
+		 then FFMPEG_fin=("-i" "${tmp}/vhs.fin.srt")
+		    FFMPEG_1+=("-map" "1" "-metadata:s:s:0" "language=fin")
+		 else FFMPEG_fin=()
+		fi
+		if [ -f "${tmp}/vhs.swe.srt" ]
+		 then FFMPEG_swe=("-i" "${tmp}/vhs.swe.srt")
+		    FFMPEG_1+=("-map" "2" "-metadata:s:s:1" "language=swe")
+		 else FFMPEG_swe=()
+		fi
+
+		# aja em. komento
+		ffmpeg "${FFMPEG_0[@]}" "${FFMPEG_fin[@]}" "${FFMPEG_swe[@]}" "${FFMPEG_1[@]}" "${product}" -y &> /dev/fd/6 || return 20
 	fi
 
-	meta-worker "${product}" "${subtitles[@]}" &> /dev/fd/6
+	meta-worker "${product}" &> /dev/fd/6
 }
 
 
