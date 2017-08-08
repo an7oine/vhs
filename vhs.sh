@@ -62,7 +62,7 @@ function check-version {
 	local current_version minimum_version
 	current_version=$1
 	minimum_version=$2
-	[ "$( echo $current_version$'\n'$minimum_version | sort-versions | head -n1 )" = $minimum_version ]
+	[ "$( echo "$current_version"$'\n'"$minimum_version" | sort-versions | head -n1 )" = "$minimum_version" ]
 }
 function dependencies {
 	local deps
@@ -73,8 +73,8 @@ function dependencies {
 	which xmllint &>/dev/null || echo -n "xmllint "
 	which jq &>/dev/null || echo -n "jq "
 	which youtube-dl &>/dev/null || echo -n "youtube-dl "
-	( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n '1 s/^yle-dl \([^:]*\):.*/\1/p' ) 2.17 ) \
-	 || echo -n "yle-dl-2.17 "
+	( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n 's/^yle-dl \([0-9.]*\):.*/\1/p' ) 2.21 ) \
+	 || echo -n "yle-dl-2.21 "
 	( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v\([^ ]*\).*/\1/p' ) 2.4 ) \
 	 || echo -n "rtmpdump-2.4 "
 	( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
@@ -444,24 +444,21 @@ function areena-worker {
 	if ! [ -s "$product" ]
 	 then
 		# lataa flv-muotoinen video sekä tekstitykset
-		yle-dl -q "${link}" -o "${tmp}/vhs.flv" &> /dev/fd/6 || return 10
+		yle-dl "${link}" -o "${tmp}/vhs.flv" &> /dev/fd/6 || return 10
 
 		# muodosta ffmpeg-komento, joka muuntaa videon mp4-muotoon ja lisää siihen suomen- ja ruotsinkieliset tekstit, jos saatavilla
-		FFMPEG_0=("-i" "${tmp}/vhs.flv")
-		FFMPEG_1=("-map" "0" "-c:v" "copy" "-c:a" "aac" "-b:a" "128k" "-c:s" "mov_text")
-		if [ -f "${tmp}/vhs.fin.srt" ]
-		 then FFMPEG_fin=("-i" "${tmp}/vhs.fin.srt")
-		    FFMPEG_1+=("-map" "1" "-metadata:s:s:0" "language=fin")
-		 else FFMPEG_fin=()
-		fi
-		if [ -f "${tmp}/vhs.swe.srt" ]
-		 then FFMPEG_swe=("-i" "${tmp}/vhs.swe.srt")
-		    FFMPEG_1+=("-map" "2" "-metadata:s:s:1" "language=swe")
-		 else FFMPEG_swe=()
-		fi
+		FFMPEG_alku=("-i" "${tmp}/vhs.flv")
+		FFMPEG_loppu=("-map" "0" "-c:v" "copy" "-c:a" "aac" "-b:a" "192k" "-c:s" "mov_text")
+
+		sindex=0
+		for srt in ${tmp}/vhs.*.srt
+		 do FFMPEG_alku+=("-i" "${srt}")
+			FFMPEG_loppu+=("-map" "$(( sindex + 1 ))" "-metadata:s:s:${sindex}" "language=$( basename "${srt}" .srt | sed 's/^vhs.//' )")
+			sindex=$(( sindex + 1 ))
+		done
 
 		# aja em. komento
-		ffmpeg "${FFMPEG_0[@]}" "${FFMPEG_fin[@]}" "${FFMPEG_swe[@]}" "${FFMPEG_1[@]}" "${product}" -y &> /dev/fd/6 || return 20
+		ffmpeg "${FFMPEG_alku[@]}" "${FFMPEG_loppu[@]}" "${product}" -y &> /dev/fd/6 || return 20
 	fi
 
 	meta-worker "${product}" &> /dev/fd/6
