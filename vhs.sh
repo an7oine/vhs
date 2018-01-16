@@ -20,6 +20,9 @@ tallentimen_paate=".txt"
 # montako kertaa kutakin latausta yritetään?
 latausyritykset=3
 
+# yle-dl-vivut
+yle_dl_vivut=()
+
 # alkuasetus-, metatiedon asetus- ja viimeistelyskripti
 profile_skripti="${kanta}/profile"
 meta_skripti="${kanta}/meta.sh"
@@ -436,15 +439,22 @@ function areena-latain {
 	 else product="${tmp}/vhs.m4v"
 	fi
 
+        # asetetaan oletusasetukset yle-dl:lle, näitä voidaan muuttaa ohjelmakohtaisesti
+	vivut=("-o" "${tmp}/vhs.flv")
+
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	if [ -x "${meta_skripti}" ]; then . "${meta_skripti}" || return 100; fi
 	. $custom_parser || return 101
 	echo
 
+	if [ ${#yle_dl_vivut[@]} -eq 0 ]
+         then vivut+="${yle_dl_vivut[@]}"
+	fi
+
 	if ! [ -s "$product" ]
 	 then
 		# lataa flv-muotoinen video sekä tekstitykset
-		yle-dl "${link}" -o "${tmp}/vhs.flv" &> /dev/fd/6 || return 10
+                yle-dl "${link}" "${vivut[@]}" &> /dev/fd/6 || return 10
 
 		# muodosta ffmpeg-komento, joka muuntaa videon mp4-muotoon ja lisää siihen suomen- ja ruotsinkieliset tekstit, jos saatavilla
 		FFMPEG_alku=("-i" "${tmp}/vhs.flv")
