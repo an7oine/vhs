@@ -6,28 +6,28 @@ script_version=1.4.3
 # ASETUKSET
 
 # tietokanta kaikista jo tallennetuista jaksoista pidetään täällä (luodaan ellei olemassa)
-lib="${HOME}/.vhs"
+kanta="${HOME}/.vhs"
 
 # tallentimet (ja väliaikaistiedostot) sijoitetaan tänne (luodaan ellei olemassa)
 vhs="${HOME}/Movies/vhs"
 
 # valmiit tiedostot sijoitetaan tänne, jos olemassa
-fine="${HOME}/Movies/tunes"
+valmis="${HOME}/Movies/tunes"
 
 # automaattitallentajien tiedostopääte
-vhsext=".txt"
+tallentimen_paate=".txt"
 
 # montako kertaa kutakin latausta yritetään?
-retries=3
+latausyritykset=3
 
 # alkuasetus-, metatiedon asetus- ja viimeistelyskripti
-profile_script="${lib}/profile"
-meta_script="${lib}/meta.sh"
-finish_script="${lib}/finish.sh"
+profile_skripti="${kanta}/profile"
+meta_skripti="${kanta}/meta.sh"
+finish_skripti="${kanta}/finish.sh"
 
 # käyttäjäagentit, bash-liput
-OSX_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.10 (KHTML, like Gecko) Version/8.0.3 Safari/600.3.10"
-iOS_agent="Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25"
+OSX_agentti="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.10 (KHTML, like Gecko) Version/8.0.3 Safari/600.3.10"
+iOS_agentti="Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25"
 shopt -s extglob
 shopt -s nullglob
 shopt -s nocasematch
@@ -38,7 +38,7 @@ shopt -s nocasematch
 
 tmp="$( mkdir -p "${vhs}"; mktemp -d "${vhs}/.vhs.XXXX" )"
 cd "${tmp}"
-mkdir "${tmp}/cache"
+mkdir "${tmp}/valimuisti"
 trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" EXIT
 trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 
@@ -46,44 +46,44 @@ trap "( cd -; rm -r \"${tmp}\" ) &>/dev/null" INT
 [[ "$( uname )" =~ cygwin ]] && tmp="$( cygpath -m "$tmp" )"
 
 # Anna käyttäjän määritellä tarvittaessa lisää asetuksia ja apufunktioita
-[ -e "${profile_script}" ] && . "${profile_script}"
+[ -e "${profile_skripti}" ] && . "${profile_skripti}"
 
 
 #######
 # ULKOISET APUOHJELMAT
 
-function sort-versions {
+function jarjesta_versiot {
 	if [ "$( uname )" = "Darwin" ]
 	 then sort -t . -g -k1,1 -k2,2 -k3,3 # Mac OS X (numeerinen järjestys kentittäin)
 	 else sort -V # Linux / Cygwin (versiojärjestys)
 	fi
 }
-function check-version {
-	local current_version minimum_version
-	current_version=$1
-	minimum_version=$2
-	[ "$( echo "$current_version"$'\n'"$minimum_version" | sort-versions | head -n1 )" = "$minimum_version" ]
+function tarkista_versio {
+	local nykyinen_versio minimiversio
+	nykyinen_versio=$1
+	minimiversio=$2
+	[ "$( echo "$nykyinen_versio"$'\n'"$minimiversio" | jarjesta_versiot | head -n1 )" = "$minimiversio" ]
 }
-function dependencies {
-	local deps
-	deps="$( (
-	check-version $BASH_VERSION 3.2 || echo -n "bash-3.2 "
-	which php &>/dev/null || echo -n "php "
-	which curl &>/dev/null || echo -n "curl "
-	which xmllint &>/dev/null || echo -n "xmllint "
-	which jq &>/dev/null || echo -n "jq "
-	which youtube-dl &>/dev/null || echo -n "youtube-dl "
-	( which yle-dl &>/dev/null && check-version $( yle-dl 2>&1 | sed -n 's/^yle-dl \([0-9.]*\):.*/\1/p' ) 2.21 ) \
-	 || echo -n "yle-dl-2.21 "
-	( which rtmpdump &>/dev/null && check-version $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v\([^ ]*\).*/\1/p' ) 2.4 ) \
-	 || echo -n "rtmpdump-2.4 "
-	( which ffmpeg &>/dev/null && check-version $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
-	 || echo -n "ffmpeg-1.2.10 "
-	( which AtomicParsley &>/dev/null && check-version $( AtomicParsley -version |awk '{print $3}' ) 0.9.5 ) \
-	 || echo -n "AtomicParsley-0.9.5 "
+function jarjestelmavaatimukset {
+	local puuttuvat
+	puuttuvat="$( (
+		tarkista_versio $BASH_VERSION 3.2 || echo -n "bash-3.2 "
+		which php &>/dev/null || echo -n "php "
+		which curl &>/dev/null || echo -n "curl "
+		which xmllint &>/dev/null || echo -n "xmllint "
+		which jq &>/dev/null || echo -n "jq "
+		which youtube-dl &>/dev/null || echo -n "youtube-dl "
+		( which yle-dl &>/dev/null && tarkista_versio $( yle-dl 2>&1 | sed -n 's/^yle-dl \([0-9.]*\):.*/\1/p' ) 2.21 ) \
+		 || echo -n "yle-dl-2.21 "
+		( which rtmpdump &>/dev/null && tarkista_versio $( rtmpdump 2>&1 | sed -n 's/^RTMPDump v\([^ ]*\).*/\1/p' ) 2.4 ) \
+		 || echo -n "rtmpdump-2.4 "
+		( which ffmpeg &>/dev/null && tarkista_versio $( ffmpeg -version | awk '/^ffmpeg version /{print $3}' ) 1.2.10 ) \
+		 || echo -n "ffmpeg-1.2.10 "
+		( which AtomicParsley &>/dev/null && tarkista_versio $( AtomicParsley -version |awk '{print $3}' ) 0.9.5 ) \
+		 || echo -n "AtomicParsley-0.9.5 "
 	) )"
-	[ -z "$deps" ] && return 0
-	echo "* Puuttuvat apuohjelmat: $deps" >&2
+	[ -z "$puuttuvat" ] && return 0
+	echo "* Puuttuvat apuohjelmat: $puuttuvat" >&2
 	exit 1
 }
 
@@ -91,36 +91,36 @@ function dependencies {
 #######
 # SISÄISET APUOHJELMAT (VAKIOSYÖTE-VAKIOTULOSTE)
 
-function remove-rating {
-	local programme_withrating
-	read programme_withrating
-	echo "${programme_withrating%% (+([SK[:digit:]]))}"
+function poista_ikarajamerkinta {
+	local ohjelma_ikarajamerkittyna
+	read ohjelma_ikarajamerkittyna
+	echo "${ohjelma_ikarajamerkittyna%% (+([SK[:digit:]]))}"
 }
-function escape-regex {
+function suojaa-regex {
 	sed 's/[(){}\[^]/\\&/g; s/]/\\&/g'
 }
-function match-any-regex {
+function vertaa-lausekkeita {
 	local programme regex
 	programme="$1"
 	tr '|' '\n' | while read regex
 	 do [[ "$programme" =~ $regex ]] && break
 	done
 }
-function dec-html {
+function tulkitse-html {
 	# muunnetaan html-koodatut erikoismerkit oletusmerkistöön
 	php -R 'echo html_entity_decode($argn, ENT_QUOTES)."\n";'
 }
-function get-xml-field {
+function hae-xml-kentta {
 	local path
 	path="${1}/@${2}"
 	xmllint --nocdata --xpath "$path" /dev/stdin 2>/dev/null | sed 's/[^"]*"\([^"]*\)"/\1/g'
 }
-function get-xml-content {
+function hae-xml-sisalto {
 	local path
 	path="$1"
 	xmllint --nocdata --xpath "$path" /dev/stdin 2>/dev/null | sed 's/<[^<]*>//g'
 }
-function ttml-to-srt {
+function ttml-srt {
 	# suodatetaan pelkät tekstit, kukin omalle rivilleen
 	# sen jälkeen numeroidaan tekstit, muunnetaan aikakoodit srt-muotoon ja jaetaan kukin 2-3 riville
 	sed -n '\#<p begin=.*>.*<br/># {N;s/\n//;}; /^<p/ p' |\
@@ -129,7 +129,7 @@ function ttml-to-srt {
 #; s#\([0-9:]\{8\}\)[.]\([0-9]\{3\}\)#\1,\2#g; s#<br/>#\
 #g'
 }
-function txtime-to-epoch {
+function txtime-epoch {
 	local txtime
 	read txtime
 	[ -n "$txtime" ] || return
@@ -138,7 +138,7 @@ function txtime-to-epoch {
 	 else date -d "$( sed 's#\(..\)[.]\(..\)[.]\(....\)#\3-\2-\1#' <<<"$txtime" )" "+%s" # Linux / Cygwin
 	fi
 }
-function epoch-to-utc {
+function epoch-utc {
 	local epoch
 	read epoch
 	[ -n "$epoch" ] || return
@@ -147,7 +147,7 @@ function epoch-to-utc {
 	 else date -u -d "@$epoch" "+%Y-%m-%dT%H:%M:%SZ" # Linux / Cygwin
 	fi
 }
-function epoch-to-touch {
+function epoch-touch {
 	local epoch
 	read epoch
 	[ -n "$epoch" ] || return
@@ -156,7 +156,7 @@ function epoch-to-touch {
 	 else date -d "@$epoch" "+%Y%m%d%H%M.%S" # Linux / Cygwin
 	fi
 }
-function tv-rating {
+function tv-ikaraja {
 	local age
 	read age
 	age="${age//[A-Za-z]}"
@@ -168,7 +168,7 @@ function tv-rating {
 	else echo "fi-tv|17+|400|"
 	fi
 }
-function movie-rating {
+function elokuva-ikaraja {
 	local age
 	read age
 	age="${age//[A-Za-z]}"
@@ -180,7 +180,7 @@ function movie-rating {
 	else echo "fi-movie|K-18|400|"
 	fi
 }
-function season-number {
+function kauden-numero {
 	local description_text r
 	read description_text
 	r='([0-9]{1,})[.]* [tuotanto]*kau[sdt]'; [[ "$description_text" =~ $r ]] && echo ${BASH_REMATCH[1]} && return 0
@@ -200,17 +200,17 @@ function season-number {
 ########
 # TALLENNUKSEN APURUTIINIT
 
-function cached-get {
-	local user_agent url cache
-	user_agent="$1"
+function valimuistihaku {
+	local user_agentti url cache
+	user_agentti="$1"
 	url="$2"
 
-	cache="${tmp}/cache/${url//[^A-Za-z0-9]/-}"
+	cache="${tmp}/valimuisti/${url//[^A-Za-z0-9]/-}"
 	cat "$cache" 2>/dev/null && return 0
 
-	curl --fail --retry "$retries" --compressed -L -s -A "${user_agent}" "${url}" | tee "$cache"
+	curl --fail --retry "$latausyritykset" --compressed -L -s -A "${user_agentti}" "${url}" | tee "$cache"
 }
-function segment-downloader {
+function lataa-segmentit {
 	local prefix postfix begin seg
 	prefix="$1"
 	postfix="$2"
@@ -219,10 +219,10 @@ function segment-downloader {
 	# lataa enintään 10000 videosegmenttiä (~ 10Gt)
 	for seg in $( seq ${begin} 9999 )
 	 do
-		curl --fail --retry "$retries" -L -N -s -A "${iOS_agent}" "${prefix}${seg}${postfix}" || break
+		curl --fail --retry "$latausyritykset" -L -N -s -A "${iOS_agentti}" "${prefix}${seg}${postfix}" || break
 	done
 }
-function meta-worker {
+function meta-kirjoitin {
 	local input output out_ext hdvideo subtracks
 	input="$1"
 
@@ -255,7 +255,7 @@ function meta-worker {
 
 	# lataa kansikuva
 	[ -n "${thumb}" ] \
-	&& curl --fail --retry "$retries" -L -s -o "${tmp}/vhs-thumb" "${thumb}" \
+	&& curl --fail --retry "$latausyritykset" -L -s -o "${tmp}/vhs-thumb" "${thumb}" \
 	&& thumb="${tmp}/vhs-thumb" \
 	&& [ -s "${thumb}" ] || thumb="REMOVE_ALL"
 
@@ -271,9 +271,9 @@ function meta-worker {
 --TVEpisode "$episode" \
 --TVEpisodeNum "$epno" \
 --TVSeasonNum "$snno" \
---year "$( epoch-to-utc <<<"$epoch" )" \
+--year "$( epoch-utc <<<"$epoch" )" \
 --purchaseDate "timestamp" \
---Rating "$( tv-rating <<<"$agelimit" )" \
+--Rating "$( tv-ikaraja <<<"$agelimit" )" \
 --longdesc "$desc" \
 --description "$desc" \
 --artwork "$thumb" \
@@ -284,9 +284,9 @@ function meta-worker {
 		 else AtomicParsley "${output}.m4v" \
 --stik value=9 \
 --title "${programme#Elokuva: }" \
---year "$( epoch-to-utc <<<"$epoch" )" \
+--year "$( epoch-utc <<<"$epoch" )" \
 --purchaseDate "timestamp" \
---Rating "$( movie-rating <<<"$agelimit" )" \
+--Rating "$( elokuva-ikaraja <<<"$agelimit" )" \
 --longdesc "$desc" \
 --description "$desc" \
 --artwork "$thumb" \
@@ -303,7 +303,7 @@ function meta-worker {
 --albumArtist "$albumArtist" \
 --tracknum "$epno" \
 --disk "$snno" \
---year "$( epoch-to-utc <<<"$epoch" )" \
+--year "$( epoch-utc <<<"$epoch" )" \
 --purchaseDate "timestamp" \
 --longdesc "$desc" \
 --description "$desc" \
@@ -314,17 +314,17 @@ function meta-worker {
 	[ $? -eq 0 ] || return 3
 
 	# tuo julkaisuajankohta ympäristömuuttujaan ja aseta se tulostiedoston aikaleimaksi
-	export touched_at="$( epoch-to-touch <<<"${epoch:-$( date +%s )}" )"
+	export touched_at="$( epoch-touch <<<"${epoch:-$( date +%s )}" )"
 	touch -t "$touched_at" "${output}.${out_ext}"
 
-	# aja finish-skripti, poista lähtötiedosto ja siirrä tulos 'fine'- tai ohjelmakohtaiseen hakemistoon
-	if [ -x "${finish_script}" ]
-	 then . "${finish_script}" "${output}.${out_ext}"
+	# aja finish-skripti, poista lähtötiedosto ja siirrä tulos 'valmis'- tai ohjelmakohtaiseen hakemistoon
+	if [ -x "${finish_skripti}" ]
+	 then . "${finish_skripti}" "${output}.${out_ext}"
 	fi
 	rm "${input}"
 	if [ -e "${output}.${out_ext}" ]
-	 then if [ -d "${fine}" ]
-		 then mv "${output}.${out_ext}" "${fine}/"
+	 then if [ -d "${valmis}" ]
+		 then mv "${output}.${out_ext}" "${valmis}/"
 		 else
 			outdir="${vhs}/${programme//[<>:\"\/\\|?*]/-}"
 			mkdir -p "${outdir}/" && mv "${output}.${out_ext}" "${outdir}/"
@@ -342,12 +342,12 @@ function areena-json {
 	lang="$1" # "fi" tai "sv"
 
 	if [ $lang = fi ]
-	  then cached-get "${OSX_agent}" 'https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=uusimmat&app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da&client=yle-areena-web&language=fi&v=5&limit=32768'
-	  else cached-get "${OSX_agent}" 'https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=nyaste&app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da&client=yle-areena-web&language=sv&v=5&limit=32768'
+	  then valimuistihaku "${OSX_agentti}" 'https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=uusimmat&app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da&client=yle-areena-web&language=fi&v=5&limit=32768'
+	  else valimuistihaku "${OSX_agentti}" 'https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=nyaste&app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da&client=yle-areena-web&language=sv&v=5&limit=32768'
 	fi
 }
 
-function areena-programmes {
+function areena-ohjelmat {
 	(
 		areena-json fi |\
 		jq -r '.data[] | ("areena " + (.labels[] | select(.type == "seriesLink") | .raw) + " " + .title)'
@@ -360,7 +360,7 @@ function areena-programmes {
 		jq -r '.data[] | select(.labels[] | .type | contains("seriesLink") | not) | ("arenan " + (.labels[] | select(.type == "itemId") | .raw) + " " + .title)'
 	)
 }
-function areena-episodes {
+function areena-jaksot {
 	local lang link base
 	lang="$1" # "fi" tai "sv"
 	link="$2"
@@ -377,7 +377,7 @@ function areena-episodes {
 	tee "${tmp}/areena-eps"
 	[ -s "${tmp}/areena-eps" ] || echo "http://${base}.yle.fi/${link}"
 }
-function areena-episode-string {
+function areena-jaksotunnus {
 	local lang link json subtitle desc epno episode
 	lang="$1" # "fi" tai "sv"
 	link="$2" # "http://are{ena,nan}.yle.fi/1-xxxxxxx"
@@ -393,8 +393,8 @@ function areena-episode-string {
 	  else echo "${episode}. ${desc}"
 	fi
 }
-function areena-worker {
-	local lang link programme custom_parser json subtitle desc type releaseDate image agelimit epno episode epoch thumb snno product album title audio_recode
+function areena-latain {
+	local lang link programme vivut custom_parser json subtitle desc type releaseDate image agelimit epno episode epoch thumb snno product album title audio_recode
 	lang="$1" # "fi" tai "sv"
 	link="$2"
 	programme="$3"
@@ -414,11 +414,11 @@ function areena-worker {
 	   else epno="$( sed -n 's/Avsnitt \([0-9]*\): .*/\1/p' <<<"$subtitle" )"
 		episode="$( sed 's/Avsnitt [0-9]*: //' <<<"$subtitle" )"
 	fi
-	epoch="$( sed 's/\([0-9]*\)-\([0-9]*\)-\([0-9]*\)T\([0-9]*:[0-9]*:[0-9]*\)+.*/\3.\2.\1 \4/' <<<"$releaseDate" | txtime-to-epoch )"
+	epoch="$( sed 's/\([0-9]*\)-\([0-9]*\)-\([0-9]*\)T\([0-9]*:[0-9]*:[0-9]*\)+.*/\3.\2.\1 \4/' <<<"$releaseDate" | txtime-epoch )"
 	thumb="https://images.cdn.yle.fi/image/upload/w_940,dpr_1.0,fl_lossy,f_auto,q_auto,fl_progressive,d_yle-areena.jpg/v1494648649/${image}.jpg"
 
 	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
-	snno="$( season-number <<<"$subtitle" )"
+	snno="$( kauden-numero <<<"$subtitle" )"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
@@ -437,7 +437,7 @@ function areena-worker {
 	fi
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
-	if [ -x "${meta_script}" ]; then . "${meta_script}" || return 100; fi
+	if [ -x "${meta_skripti}" ]; then . "${meta_skripti}" || return 100; fi
 	. $custom_parser || return 101
 	echo
 
@@ -461,36 +461,36 @@ function areena-worker {
 		ffmpeg "${FFMPEG_alku[@]}" "${FFMPEG_loppu[@]}" "${product}" -y &> /dev/fd/6 || return 20
 	fi
 
-	meta-worker "${product}" &> /dev/fd/6
+	meta-kirjoitin "${product}" &> /dev/fd/6
 }
 
 
 ###########
 # NELONEN RUUTU
 
-function ruutu-programmes {
-	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
+function ruutu-ohjelmat {
+	curl --fail --retry "$latausyritykset" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
 	sed -n '\#<a class="[^"]*" href="/[^/]*/[^/]*"># {N;N;N;N;s#.*<a class="[^"]*" href="/\([^/"]*/[^/"]*\)">.*<span class="mdc-list-item__text__primary">. *\([^<]*\) *</span>.*#ruutu-sarja \1 \2#p;}'
-	curl --fail --retry "$retries" -L -s http://www.ruutu.fi/ohjelmat/elokuvat |\
+	curl --fail --retry "$latausyritykset" -L -s http://www.ruutu.fi/ohjelmat/elokuvat |\
 	sed -n '\#<a class="[^"]*" href="/video/[0-9]*"># {N;N;N;N;N;N;N;s#.*<a class="[^"]*" href="/\(video/[0-9]*\)">.*<h1 class="ruutu-card__title">. *\([^<]*\) *</h1>.*#ruutu-elokuva \1 \2#p;}'
 }
-function ruutu-episodes {
+function ruutu-jaksot {
 	local type link
 	type="$1"
 	link="$2"
 	if [ "$type" = "sarja" ]
-	 then curl --fail --retry "$retries" -L -s "http://www.ruutu.fi/${link}" |\
+	 then curl --fail --retry "$latausyritykset" -L -s "http://www.ruutu.fi/${link}" |\
 		sed -n 's#.*"/video/\([0-9]\{1,\}\)".*#\1#p' |\
 		while read ep
-		 do [ -n "$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${ep}" | dec-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
+		 do [ -n "$( valimuistihaku "${OSX_agentti}" "http://gatling.nelonenmedia.fi/media-xml-cache?id=${ep}" | tulkitse-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
 		done
 	 else echo "http://www.ruutu.fi/${link}"
 	fi
 }
-function ruutu-episode-string {
+function ruutu-jaksotunnus {
 	local link html_metadata epid metadata episode desc
 	link="$1"
-	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
+	html_metadata="$( valimuistihaku "${OSX_agentti}" "${link}" | tulkitse-html )"
 	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
 	og_desc="$( sed -n 's#<meta property=\"og:description\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
 	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]*.*/\1/p' <<<"$og_title" )"
@@ -499,13 +499,13 @@ function ruutu-episode-string {
 	desc="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] [^.!?]*[.!?] //' <<<"$og_desc" )"
 	echo "Osa ${epno} (kausi ${snno}): ${episode}. ${desc}"
 }
-function ruutu-worker {
+function ruutu-latain {
 	local link programme custom_parser html_metadata og_title epno snno episode epid metadata source desc agelimit thumb product
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
 
-	html_metadata="$( cached-get "${OSX_agent}" "${link}" | dec-html )"
+	html_metadata="$( valimuistihaku "${OSX_agentti}" "${link}" | tulkitse-html )"
 	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
 	og_desc="$( sed -n 's#<meta property=\"og:description\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
 	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]*.*/\1/p' <<<"$og_title" )"
@@ -514,21 +514,21 @@ function ruutu-worker {
 	desc="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] [^.!?]*[.!?] //' <<<"$og_desc" )"
 
 	epid="${link##*/}"
-	metadata="$( cached-get "${OSX_agent}" "http://gatling.ruutu.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
+	metadata="$( valimuistihaku "${OSX_agentti}" "http://gatling.nelonenmedia.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
 	
-	#bitrates="$( get-xml-field //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
-	#source="$( get-xml-content //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
-	m3u8_source="$( get-xml-content //Playerdata/Clip/AppleMediaFiles/AppleMediaFile <<<"$metadata" )"
+	#bitrates="$( hae-xml-kentta //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
+	#source="$( hae-xml-sisalto //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
+	m3u8_source="$( hae-xml-sisalto //Playerdata/Clip/AppleMediaFiles/AppleMediaFile <<<"$metadata" )"
 	#[ -n "$source" -o -n "$m3u8_source" ] || return 10
 
-	epoch="$( get-xml-field //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-to-epoch )"
-	agelimit="$( get-xml-content //Playerdata/Clip/AgeLimit <<<"$metadata" )"
-	thumb="$( get-xml-field //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
+	epoch="$( hae-xml-kentta //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-epoch )"
+	agelimit="$( hae-xml-sisalto //Playerdata/Clip/AgeLimit <<<"$metadata" )"
+	thumb="$( hae-xml-kentta //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
 
 	product="${tmp}/vhs.m4v"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
-	if [ -x "${meta_script}" ]; then . "${meta_script}" || return 100; fi
+	if [ -x "${meta_skripti}" ]; then . "${meta_skripti}" || return 100; fi
 	. $custom_parser || return 101
 	echo
 
@@ -541,52 +541,52 @@ function ruutu-worker {
 		rm "${tmp}/presync.m4v"
 	fi
 
-	meta-worker "${product}" &> /dev/fd/6
+	meta-kirjoitin "${product}" &> /dev/fd/6
 }
 
 
 #########
 # MTV KATSOMO
 
-function katsomo-programmes {
-	cached-get "${OSX_agent}" "https://static.katsomo.fi/cms_prod/all-programs-subcats.json" |\
+function katsomo-ohjelmat {
+	valimuistihaku "${OSX_agentti}" "https://static.katsomo.fi/cms_prod/all-programs-subcats.json" |\
 	jq -r '.categories[] | ("katsomo " + .id + " " + .title)'
 }
-function katsomo-episodes {
+function katsomo-jaksot {
 	local link
 	link="$1"
 
-	cached-get "${OSX_agent}" "https://api.katsomo.fi/api/web/search/categories/${link}/assets.json" |\
+	valimuistihaku "${OSX_agentti}" "https://api.katsomo.fi/api/web/search/categories/${link}/assets.json" |\
 	jq -r '.assets[][]? | ("https://api.katsomo.fi/api/web/asset/" + .["@id"])'
 }
-function katsomo-episode-string {
+function katsomo-jaksotunnus {
 	local link metadata episode desc
 	link="$1"
 
-	metadata="$( cached-get "${OSX_agent}" "${link}" )"
-	episode="$( get-xml-content //asset/subtitle <<<"$metadata" | dec-html )"
-	desc="$( get-xml-content //asset/description <<<"$metadata" | dec-html )"
+	metadata="$( valimuistihaku "${OSX_agentti}" "${link}" )"
+	episode="$( hae-xml-sisalto //asset/subtitle <<<"$metadata" | tulkitse-html )"
+	desc="$( hae-xml-sisalto //asset/description <<<"$metadata" | tulkitse-html )"
 	echo "${episode}. ${desc}"
 }
-function katsomo-worker {
+function katsomo-latain {
 	local link programme custom_parser metadata episode desc snno manifest product 
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
 
-	metadata="$( cached-get "${OSX_agent}" "${link}" )"
-	episode="$( get-xml-content //asset/subtitle <<<"$metadata" | dec-html )"
-	desc="$( get-xml-content //asset/description <<<"$metadata" | dec-html )"
+	metadata="$( valimuistihaku "${OSX_agentti}" "${link}" )"
+	episode="$( hae-xml-sisalto //asset/subtitle <<<"$metadata" | tulkitse-html )"
+	desc="$( hae-xml-sisalto //asset/description <<<"$metadata" | tulkitse-html )"
 
 	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
-	snno="$( season-number <<<"$desc" )"
+	snno="$( kauden-numero <<<"$desc" )"
 
-	manifest="$( cached-get "${OSX_agent}" "${link}/play.json" | jq -r '.playback.items[][0].url' )"
+	manifest="$( valimuistihaku "${OSX_agentti}" "${link}/play.json" | jq -r '.playback.items[][0].url' )"
 
 	product="${tmp}/vhs.m4v"
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
-	if [ -x "${meta_script}" ]; then . "${meta_script}" || return 100; fi
+	if [ -x "${meta_skripti}" ]; then . "${meta_skripti}" || return 100; fi
 	. $custom_parser || return 101
 	echo
 
@@ -596,7 +596,7 @@ function katsomo-worker {
 		ffmpeg -i "${tmp}/vhs.ismv" -c copy "${product}" -y -v quiet || return 20
 	fi
 
-	meta-worker "${product}" &> /dev/fd/6
+	meta-kirjoitin "${product}" &> /dev/fd/6
 }
 
 
@@ -604,71 +604,71 @@ function katsomo-worker {
 # OHJELMIEN, JAKSOJEN JA MEDIAN HAKURUTIINIT
 
 # ohjelmalistaus ladataan verkosta vain kerran ja tallennetaan ajokohtaiseen välimuistitiedostoon
-function sorted-programmes {
+function jarjestetyt-ohjelmat {
 	local cache
-	cache="${tmp}/cache/programmes.txt"
+	cache="${tmp}/valimuisti/programmes.txt"
 	cat "${cache}" 2>/dev/null && return 0
-	[ -d "${tmp}/cache" ] || return 1
+	[ -d "${tmp}/valimuisti" ] || return 1
 
 	# hae kaikki saatavilla olevat TV-ohjelmat
 	(
-		areena-programmes
-		ruutu-programmes
-		katsomo-programmes
+		areena-ohjelmat
+		ruutu-ohjelmat
+		katsomo-ohjelmat
 	) |\
 	LC_ALL=UTF-8 sort -f -t ' ' -u -k3 |\
 	tee "${cache}"
 }
-function query-sourced-programmes {
+function hae-ohjelmat-lahteineen {
 	local regex source link title
 	regex="$1"
 
-	sorted-programmes | while read source link title
+	jarjestetyt-ohjelmat | while read source link title
 	 do
-		[ -n "$regex" ] && ! match-any-regex "$( remove-rating <<<"$title" )" <<<"$regex" && continue
+		[ -n "$regex" ] && ! vertaa-lausekkeita "$( poista_ikarajamerkinta <<<"$title" )" <<<"$regex" && continue
 		echo "$source" "$link" "$title"
 	done
 }
-function query-programme-episodes {
+function hae-jaksot {
 	local source link cache
 	source="$1"
 	link="$2"
 
-	cache="${tmp}/cache/${source}-${link##*[/=]}-episodes.txt"
+	cache="${tmp}/valimuisti/${source}-${link##*[/=]}-episodes.txt"
 	cat "${cache}" 2>/dev/null && return 0
-	[ -d "${tmp}/cache" ] || return 1
+	[ -d "${tmp}/valimuisti" ] || return 1
 
 	case $source in
-	 areena) areena-episodes fi "$link" ;;
-	 arenan) areena-episodes sv "$link" ;;
-	 ruutu-sarja) ruutu-episodes "sarja" "$link" ;;
-	 ruutu-elokuva) ruutu-episodes "elokuva" "$link" ;;
-	 katsomo) katsomo-episodes "$link" ;;
+	 areena) areena-jaksot fi "$link" ;;
+	 arenan) areena-jaksot sv "$link" ;;
+	 ruutu-sarja) ruutu-jaksot "sarja" "$link" ;;
+	 ruutu-elokuva) ruutu-jaksot "elokuva" "$link" ;;
+	 katsomo) katsomo-jaksot "$link" ;;
 	 *) echo "*** OHJELMAVIRHE: source=\"${source}\" ***" >&2; exit -1 ;;
 	# suodatetaan pois useaan kertaan esiintyvät jakson linkit
 	esac | awk '!x[$0]++' | tee "${cache}"
 }
-function unified-episode-string {
+function jaksotunnus {
 	local link
 	link="$1"
 
 	case "$( sed 's#https*://\([^/]*\).*#\1#' <<<"$link" )" in
-	 areena.yle.fi) areena-episode-string fi "$@" ;;
-	 arenan.yle.fi) areena-episode-string sv "$@" ;;
-	 www.ruutu.fi) ruutu-episode-string "$@" ;;
-	 api.katsomo.fi) katsomo-episode-string "$@" ;;
+	 areena.yle.fi) areena-jaksotunnus fi "$@" ;;
+	 arenan.yle.fi) areena-jaksotunnus sv "$@" ;;
+	 www.ruutu.fi) ruutu-jaksotunnus "$@" ;;
+	 api.katsomo.fi) katsomo-jaksotunnus "$@" ;;
 	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
 	esac
 }
-function unified-worker {
+function latain {
 	local link
 	link="$1"
 
 	case "$( sed 's#https*://\([^/]*\).*#\1#' <<<"$link" )" in
-	 areena.yle.fi) areena-worker fi "$@" ;;
-	 arenan.yle.fi) areena-worker sv "$@" ;;
-	 www.ruutu.fi) ruutu-worker "$@" ;;
-	 api.katsomo.fi) katsomo-worker "$@" ;;
+	 areena.yle.fi) areena-latain fi "$@" ;;
+	 arenan.yle.fi) areena-latain sv "$@" ;;
+	 www.ruutu.fi) ruutu-latain "$@" ;;
+	 api.katsomo.fi) katsomo-latain "$@" ;;
 	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
 	esac
 }
@@ -677,18 +677,18 @@ function unified-worker {
 ##########
 # JAKSON TALLENNUS, VIRHEIDEN KÄSITTELY JA TIETOKANNAN YLLÄPITO
 
-function record-episode {
+function tallenna-jakso {
 	local programme eplink custom_parser clipid donefile
 	programme="$1"
 	eplink="$2"
 	custom_parser="$3"
 
-	mkdir -p "${lib}/${programme}"
+	mkdir -p "${kanta}/${programme}"
 
 	# ota linkin loppuosa jakson tunnisteeksi
 	clipid="${eplink##*[/=]}"
-	donefile="${lib}/${programme}/${clipid}.done"
-	exec 6>"${lib}/${programme}/${clipid}.log"
+	donefile="${kanta}/${programme}/${clipid}.done"
+	exec 6>"${kanta}/${programme}/${clipid}.log"
 
 	# tutki onko jokin tätä tunnistetta vastaava jakso tallennettu jo aiemmin:
 	# - ohita, jos aiemmalla tallenteella ei ole tarkempaa yksilöintitietoa;
@@ -696,7 +696,7 @@ function record-episode {
 	[ -f "$donefile" ] && ! [ -s "$donefile" ] && return 0
 
 	# anna työrutiinille tyhjä syöte vakiosyötteen (linkit ohjelman jaksoihin) sijaan
-	unified-worker "$eplink" "$programme" "$custom_parser" </dev/zero
+	latain "$eplink" "$programme" "$custom_parser" </dev/zero
 
 	# jos tallennus onnistui, luo '.done', muuten näytä virhekuvaus
 	case $? in
@@ -716,23 +716,23 @@ function record-episode {
 ############
 # AUTOMAATTITALLENTAJA
 
-function recording-worker {
+function automaattilatain {
 	local custom_parser recorder programme regex source link title eplink receps neweps
 	custom_parser="${tmp}/custom-parser.sh"
 	
-	for recorder in "${vhs}"/*"${vhsext}"
+	for recorder in "${vhs}"/*"${tallentimen_paate}"
 	 do
-		programme="$( basename "$recorder" ${vhsext} )"
+		programme="$( basename "$recorder" ${tallentimen_paate} )"
 		regex="$( sed 1q "$recorder" )"
 		sed 1d "$recorder" >"$custom_parser"
 
 		if [ -n "${regex}" ]
-		 then query-sourced-programmes "${regex}"
-		 else query-sourced-programmes "^$( escape-regex <<<"$programme" )$"
+		 then hae-ohjelmat-lahteineen "${regex}"
+		 else hae-ohjelmat-lahteineen "^$( suojaa-regex <<<"$programme" )$"
 		fi | while read source link title
 		 do
-			query-programme-episodes "$source" "$link" | while read eplink
-			 do record-episode "$programme" "$eplink" "$custom_parser"
+			hae-jaksot "$source" "$link" | while read eplink
+			 do tallenna-jakso "$programme" "$eplink" "$custom_parser"
 			done | while read receps
 			 do [ -z "$neweps" ] && echo -n "${programme} " && neweps="y"
 				[ -n "$receps" ] && echo -n "$receps "
@@ -748,7 +748,7 @@ function recording-worker {
 #############
 # OPASTUS
 
-function print-cmds {
+function nayta-komennot {
 	echo " p <regex> - listaa kaikki saatavilla olevat ohjelmat <tai hae lausekkeella>"
 	echo " e regex   - näytä saatavilla olevien jaksojen määrä"
 	echo " l regex   - listaa saatavilla olevien jaksojen tiedot"
@@ -762,13 +762,13 @@ function print-cmds {
 	echo " q         - poistu komentotulkkitilasta"
 }
 
-function print-help {
+function nayta-ohje {
 	echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
 	echo
 	echo "Tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo ja TV5"
 	echo
 	echo "Käytössä ovat seuraavat komennot, joissa 'regex' viittaa ohjelman nimeen :"
-	print-cmds
+	nayta-komennot
 	echo
 	echo "Suoritus ilman parametrejä toteuttaa komennolla \"a\" asetetut tallennukset"
 }
@@ -777,7 +777,7 @@ function print-help {
 #############
 # KOMENTOTULKKI
 
-function interpret {
+function tulkki {
 	local cmd source link title episodes eplink programme receps indices recorder cmdline
 	cmd="$1"
 	shift
@@ -785,36 +785,36 @@ function interpret {
 
 	case "$cmd" in
 	 p|prog)
-		query-sourced-programmes "$*" | while read source link title
+		hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
-			printf "%15s %s\n" "[$source]" "$( remove-rating <<<"$title" )"
+			printf "%15s %s\n" "[$source]" "$( poista_ikarajamerkinta <<<"$title" )"
 		done
 		;;
 	 e|ep)
-		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
-			episodes="$( query-programme-episodes "$source" "$link" | wc -l )"
-			printf "%15s %s : %d jakso" "[$source]" "$( remove-rating <<<"$title" )" "$episodes"
+			episodes="$( hae-jaksot "$source" "$link" | wc -l )"
+			printf "%15s %s : %d jakso" "[$source]" "$( poista_ikarajamerkinta <<<"$title" )" "$episodes"
 			[ $episodes -eq 1 ] || echo -n "a"
 			echo
 		done
 		;;
 	 l|list)
-		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
-			remove-rating <<<"$title"
-			query-programme-episodes "$source" "$link" | while read eplink
-			 do unified-episode-string "${eplink}"
+			poista_ikarajamerkinta <<<"$title"
+			hae-jaksot "$source" "$link" | while read eplink
+			 do jaksotunnus "${eplink}"
 			done | cat -n
 		done
 		;;
 	 r|rec)
-		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
-			programme="$( remove-rating <<<"$title" )"
+			programme="$( poista_ikarajamerkinta <<<"$title" )"
 			echo "${programme}"
-			query-programme-episodes "$source" "$link" | while read eplink
-			 do record-episode "$programme" "$eplink" /dev/null
+			hae-jaksot "$source" "$link" | while read eplink
+			 do tallenna-jakso "$programme" "$eplink" /dev/null
 			done | while read receps
 			 do ( [ -n "$receps" ] && echo -n "$receps " ) || echo -n "..."
 			done && echo
@@ -822,13 +822,13 @@ function interpret {
 		;;
 	 s|select)
 		exec 3<&0
-		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
-			programme="$( remove-rating <<<"$title" )"
-			cache="${tmp}/cache/selecting-episodes.txt"
+			programme="$( poista_ikarajamerkinta <<<"$title" )"
+			cache="${tmp}/valimuisti/selecting-episodes.txt"
 			echo "${programme}"
-			query-programme-episodes "$source" "$link" | tee "${cache}" | while read eplink
-			 do unified-episode-string "${eplink}"
+			hae-jaksot "$source" "$link" | tee "${cache}" | while read eplink
+			 do jaksotunnus "${eplink}"
 			done | cat -n
 
 			read -e -p "Valitse tallennettavat jaksot: " indices <&3
@@ -837,7 +837,7 @@ function interpret {
 			for i in $( eval echo "$( sed 's/\([0-9]*\)-\([0-9]*\)/{\1..\2}/g' <<<"${indices}" )" )
 			 do
 				if [ "$i" -gt 0 ] 2>/dev/null
-				 then record-episode "$programme" "$( sed -n "$i p" "${cache}" )" /dev/null
+				 then tallenna-jakso "$programme" "$( sed -n "$i p" "${cache}" )" /dev/null
 				fi
 			done | while read receps
 			 do ( [ -n "$receps" ] && echo -n "$receps " ) || echo -n "..."
@@ -847,14 +847,14 @@ function interpret {
 		;;
 	 m|mark)
 		exec 3<&0
-		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
-			programme="$( remove-rating <<<"$title" )"
-			cache="${tmp}/cache/selecting-episodes.txt"
+			programme="$( poista_ikarajamerkinta <<<"$title" )"
+			cache="${tmp}/valimuisti/selecting-episodes.txt"
 			echo "${programme}"
-			query-programme-episodes "$source" "$link" | tee "${cache}" | while read eplink
-			 do donefile="${lib}/${programme}/${eplink##*[/=]}.done"
-				unified-episode-string "${eplink}" | ( ( [ -f "${donefile}" ] && sed 's/^/* /' ) || sed 's/^/  /' )
+			hae-jaksot "$source" "$link" | tee "${cache}" | while read eplink
+			 do donefile="${kanta}/${programme}/${eplink##*[/=]}.done"
+				jaksotunnus "${eplink}" | ( ( [ -f "${donefile}" ] && sed 's/^/* /' ) || sed 's/^/  /' )
 			done | cat -n
 
 			# luetaan syöte, poistutaan jos tyhjä
@@ -863,7 +863,7 @@ function interpret {
 
 			# poistetaan kaikki olemassa olevat done-tiedostot
 			while read eplink
-			 do rm "${lib}/${programme}/${eplink##*[/=]}.done" 2>/dev/null
+			 do rm "${kanta}/${programme}/${eplink##*[/=]}.done" 2>/dev/null
 			done < "${cache}"
 
 			# laajennetaan merkinnät muotoa '1-5' muotoon '1 2 3 4 5'
@@ -871,8 +871,8 @@ function interpret {
 			 do
 				if [ "$i" -gt 0 ] 2>/dev/null
 				 then eplink="$( sed -n "$i p" "${cache}" )"
-					mkdir -p "${lib}/${programme}"
-					touch "${lib}/${programme}/${eplink##*[/=]}.done"
+					mkdir -p "${kanta}/${programme}"
+					touch "${kanta}/${programme}/${eplink##*[/=]}.done"
 				fi
 			done
 		done
@@ -881,10 +881,10 @@ function interpret {
 	 /|v|vhs)
 		echo "Aktiiviset tallentimet:"
 		echo "-----------------------"
-		for recorder in "${vhs}"/*"${vhsext}"
+		for recorder in "${vhs}"/*"${tallentimen_paate}"
 		 do
-			programme="$( basename "${recorder}" "${vhsext}" )"
-			[ -n "$*" ] && ! match-any-regex "$programme" <<<"$*" && continue
+			programme="$( basename "${recorder}" "${tallentimen_paate}" )"
+			[ -n "$*" ] && ! vertaa-lausekkeita "$programme" <<<"$*" && continue
 			echo -n "${programme} "
 			[ -n "$( sed 1q "$recorder" )" ] && echo -n "($( sed 1q "$recorder" ))"
 			[ -n "$( sed 1d "$recorder" )" ] && echo -n "*"
@@ -892,34 +892,34 @@ function interpret {
 		done
 		;;
 	 +|a|add)
-		[ -n "$*" ] && query-sourced-programmes "$*" | while read source link title
+		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
-			recorder="${vhs}/$( remove-rating <<<"$title" )${vhsext}"
+			recorder="${vhs}/$( poista_ikarajamerkinta <<<"$title" )${tallentimen_paate}"
 			touch "${recorder}" && echo "+ ${recorder}"
 		done
 		;;
 	 -|d|del)
-		[ -n "$*" ] && for recorder in "${vhs}"/*"${vhsext}"
+		[ -n "$*" ] && for recorder in "${vhs}"/*"${tallentimen_paate}"
 		 do
-			programme="$( basename "${recorder}" "${vhsext}" )"
-			match-any-regex "$programme" <<<"$*" && rm "${recorder}" && echo "- ${recorder}"
+			programme="$( basename "${recorder}" "${tallentimen_paate}" )"
+			vertaa-lausekkeita "$programme" <<<"$*" && rm "${recorder}" && echo "- ${recorder}"
 		done
 		;;
 	 i|interactive)
-	 	print-cmds
+	 	nayta-komennot
 		while read -e -p "vhs.sh> " cmdline
 		 do
 			history -s $cmdline
 		 	if [ "$cmdline" = "q" -o "$cmdline" = "quit" ]
 			 then break
-			elif [ "$cmdline" = "h" -o "$cmdline" = "help" ]
-			 then print-cmds
-			 else interpret $cmdline
+                       elif [ "$cmdline" = "h" -o "$cmdline" = "help" ]
+			 then nayta-komennot
+			 else tulkki $cmdline
 			fi
 		done
 		;;
 	 *)
-		print-help
+		nayta-ohje
 		;;
 	esac
 }
@@ -929,18 +929,18 @@ function interpret {
 # PÄÄOHJELMA
 
 # tarkista apuohjelmien saatavuus
-dependencies
+jarjestelmavaatimukset
 
 # vaihda vanhojen tallentimien tiedostopäätteet (.vhs) tarvittaessa
-[ "$vhsext" != ".vhs" ] && for old_recorder in "${vhs}"/*.vhs
- do mv "$old_recorder" "${old_recorder%.vhs}${vhsext}"
+[ "$tallentimen_paate" != ".vhs" ] && for old_recorder in "${vhs}"/*.vhs
+ do mv "$old_recorder" "${old_recorder%.vhs}${tallentimen_paate}"
 done
 
 # ei argumentteja: käsittele kaikki tallentimet
 # muuten: tulkitse annettu komentorivi
 if [ $# -eq 0 ]
  then
-	if [ -n "$( echo "${vhs}"/*${vhsext} )" ]
+	if [ -n "$( echo "${vhs}"/*${tallentimen_paate} )" ]
 	 then
 		# älä aja automaattitallennusta, jos sessio on jo käynnissä
 		existing_pidfile="$( find -L "${vhs}" -name autorec.pid )"
@@ -953,12 +953,12 @@ if [ $# -eq 0 ]
 			fi
 		fi
 		echo $$ > "${tmp}/autorec.pid"
-		recording-worker
+		automaattilatain
 		exit $?
 	 else
 		echo "Ei asetettuja tallentimia!" >&2
-		print-help >&2
+		nayta-ohje >&2
 	fi
  else
-	interpret "$@"
+	tulkki "$@"
 fi
