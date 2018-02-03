@@ -487,9 +487,9 @@ function areena-latain {
 # NELONEN RUUTU
 
 function ruutu-ohjelmat {
-	curl --fail --retry "$latausyritykset" -L -s http://www.ruutu.fi/ohjelmat/kaikki |\
+	valimuistihaku "${OSX_agentti}" http://www.ruutu.fi/ohjelmat/kaikki |\
 	sed -n '\#<a class="[^"]*" href="/[^/]*/[^/]*"># {N;N;N;N;s#.*<a class="[^"]*" href="/\([^/"]*/[^/"]*\)">.*<span class="mdc-list-item__text__primary">. *\([^<]*\) *</span>.*#ruutu-sarja \1 \2#p;}'
-	curl --fail --retry "$latausyritykset" -L -s http://www.ruutu.fi/ohjelmat/elokuvat |\
+	valimuistihaku "${OSX_agentti}" http://www.ruutu.fi/ohjelmat/elokuvat |\
 	sed -n '\#<a class="[^"]*" href="/video/[0-9]*"># {N;N;N;N;N;N;N;s#.*<a class="[^"]*" href="/\(video/[0-9]*\)">.*<h1 class="ruutu-card__title">. *\([^<]*\) *</h1>.*#ruutu-elokuva \1 \2#p;}'
 }
 function ruutu-jaksot {
@@ -497,7 +497,7 @@ function ruutu-jaksot {
 	type="$1"
 	link="$2"
 	if [ "$type" = "sarja" ]
-	 then curl --fail --retry "$latausyritykset" -L -s "http://www.ruutu.fi/${link}" |\
+	 then valimuistihaku "${OSX_agentti}" "http://www.ruutu.fi/${link}" |\
 		sed -n 's#.*"/video/\([0-9]\{1,\}\)".*#\1#p' |\
 		while read ep
 		 do [ -n "$( valimuistihaku "${OSX_agentti}" "http://gatling.nelonenmedia.fi/media-xml-cache?id=${ep}" | tulkitse-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
