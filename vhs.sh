@@ -341,94 +341,102 @@ function meta-kirjoitin {
 # YLE AREENA
 
 function areena-json {
-	local lang
+	local lang cache limit offset
 	lang="$1" # "fi" tai "sv"
 
-	if [ $lang = fi ]
-	  then valimuistihaku "${OSX_agentti}" 'https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=uusimmat&app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da&client=yle-areena-web&language=fi&v=5&limit=32768'
-	  else valimuistihaku "${OSX_agentti}" 'https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=nyaste&app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da&client=yle-areena-web&language=sv&v=5&limit=32768'
-	fi
+    cache="${tmp}/valimuisti/areena-${lang}.json"
+    cat "$cache" 2>/dev/null && return 0
+
+    (
+        echo '['
+        limit=100
+        offset=0
+        while true
+          do
+            data="$( curl --fail --retry "$latausyritykset" --compressed -L -s -A "${OSX_agentti}" "https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=a-o&language=${lang}&v=7&client=yle-areena-web&app_id=areena_web_personal_prod&app_key=6c64d890124735033c50099ca25dd2fe&limit=${limit}&offset=${offset}" 2>/dev/null | jq -r '.data' )"
+            if [ $( jq -r '. | length' <<<"$data" ) -eq 0 ]
+              then break
+            fi
+            if [ $offset -gt 0 ]
+              then
+                echo ','
+            fi
+            grep '^ ' <<<"${data}"
+            offset=$(( offset + limit ))
+        done
+        echo ']'
+    ) | tee "$cache"
 }
 
 function areena-ohjelmat {
 	(
 		areena-json fi |\
-		jq -r '.data[] | ("areena " + (.labels[] | select(.type == "seriesLink") | .raw) + " " + .title)'
+		jq -r '.[] | ("areena " + (.labels[] | select(.type == "seriesLink") | .raw) + " " + .title)'
 		areena-json fi |\
-		jq -r '.data[] | select(.labels[] | .type | contains("seriesLink") | not) | ("areena " + (.labels[] | select(.type == "itemId") | .raw) + " " + .title)'
+		jq -r '.[] | select(.labels[] | .type | contains("seriesLink") | not) | ("areena " + (.labels[] | select(.type == "itemId") | .raw) + " " + .title)'
 
 		areena-json sv |\
-		jq -r '.data[] | ("arenan " + (.labels[] | select(.type == "seriesLink") | .raw) + " " + .title)'
+		jq -r '.[] | ("arenan " + (.labels[] | select(.type == "seriesLink") | .raw) + " " + .title)'
 		areena-json sv |\
-		jq -r '.data[] | select(.labels[] | .type | contains("seriesLink") | not) | ("arenan " + (.labels[] | select(.type == "itemId") | .raw) + " " + .title)'
+		jq -r '.[] | select(.labels[] | .type | contains("seriesLink") | not) | ("arenan " + (.labels[] | select(.type == "itemId") | .raw) + " " + .title)'
 	)
 }
 function areena-jaksot {
-	local lang link base
-	lang="$1" # "fi" tai "sv"
-	link="$2"
+	local link base
+	link="$1"
 
-	if [ $lang = fi ]
-	  then base=areena
-	  else base=arenan
-	fi
-
-	# ohjelmalinkit elokuviin, konsertteihin yms. toimivat sellaisenaan videolinkkeinä
-
-	areena-json ${lang} |\
-	jq -r '.data[] | select(.labels[] | select(.type == "seriesLink" and .raw == "'${link}'")).labels[] | select(.type == "itemId") | ("http://'${base}'.yle.fi/" + .raw)' |\
+	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
+	jq -r '.data[].id | ("https://areena.yle.fi/" + . + "")' |\
 	tee "${tmp}/areena-eps"
-	[ -s "${tmp}/areena-eps" ] || echo "http://${base}.yle.fi/${link}"
 }
 function areena-jaksotunnus {
-	local lang link json subtitle desc epno episode
-	lang="$1" # "fi" tai "sv"
-	link="$2" # "http://are{ena,nan}.yle.fi/1-xxxxxxx"
+	local link json title desc epno episode
+	link="$1" # "1-xxxxxxx"
 
-	json="$( areena-json ${lang} | jq '.data[] | select(.labels[] | select(.type == "itemId" and .raw == "'${link##*/}'"))' )"
-	subtitle="$( jq -r '.subtitle' <<<"${json}" )"
-	desc="$( jq -r '.description' <<<"${json}" )"
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/player.api.yle.fi/v1/preview}.json?app_id=player_static_prod&app_key=8930d72170e48303cf5f3867780d549b" |\
+	jq -r '.data.ok_ondemand' )"
+	title="$( jq -r '.title.fin' <<<"${json}" )"
+	desc="$( jq -r '.description.fin' <<<"${json}" )"
 
-	epno="$( sed -n 's/Jakso \([0-9]*\): .*/\1/p' <<<"$subtitle" )"
-	episode="$( sed 's/Jakso [0-9]*: //' <<<"$subtitle" )"
+	epno="$( sed -n 's/Kausi [0-9]*, \([0-9]*\).*/\1/p' <<<"$title" )"
+	episode="$( sed 's/Kausi [0-9]*, [0-9/]*[.] //' <<<"$title" )"
 	if [ -n "$epno" ]
 	  then echo "Osa ${epno}: ${episode}. ${desc}"
 	  else echo "${episode}. ${desc}"
 	fi
 }
 function areena-latain {
-	local lang link programme vivut custom_parser json subtitle desc type releaseDate image agelimit epno episode epoch thumb snno product album title audio_recode
-	lang="$1" # "fi" tai "sv"
-	link="$2"
-	programme="$3"
-	custom_parser="$4"
+	local link programme vivut custom_parser json title desc type releaseDate image agelimit epno episode epoch thumb snno product album title audio_recode
+	link="$1"
+	programme="$2"
+	custom_parser="$3"
 
-	json="$( areena-json ${lang} | jq '.data[] | select(.labels[] | select(.type == "itemId" and .raw == "'${link##*/}'"))' )"
-	subtitle="$( jq -r '.subtitle' <<<"${json}" )"
-	desc="$( jq -r '.description' <<<"${json}" )"
-	type="$( jq -r '.labels[] | select(.type == "mediaType").raw' <<<"${json}" )"
-	releaseDate="$( jq -r '.labels[] | select(.type == "releaseDate").raw' <<<"${json}" )"
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/player.api.yle.fi/v1/preview}.json?app_id=player_static_prod&app_key=8930d72170e48303cf5f3867780d549b" |\
+	jq -r '.data.ok_ondemand' )"
+	title="$( jq -r '.title.fin' <<<"${json}" )"
+	desc="$( jq -r '.description.fin' <<<"${json}" )"
+	type="$( jq -r '.type' <<<"${json}" )"
+
+	#releaseDate="$( jq -r '.labels[] | select(.type == "releaseDate").raw' <<<"${json}" )"
+	#epoch="$( sed 's/\([0-9]*\)-\([0-9]*\)-\([0-9]*\)T\([0-9]*:[0-9]*:[0-9]*\)+.*/\3.\2.\1 \4/' <<<"$releaseDate" | txtime-epoch )"
+	epoch=$( date +%s )
+
 	image="$( jq -r '.image.id' <<<"${json}" )"
-	agelimit="$( jq -r '.labels[] | select(.type == "contentRating.ageRestriction").raw' <<<"${json}" )"
+	agelimit="$( jq -r '.content_rating.ageRestriction' <<<"${json}" )"
 
-	if [ $lang = fi ]
-	   then epno="$( sed -n 's/Jakso \([0-9]*\): .*/\1/p' <<<"$subtitle" )"
-		episode="$( sed 's/Jakso [0-9]*: //' <<<"$subtitle" )"
-	   else epno="$( sed -n 's/Avsnitt \([0-9]*\): .*/\1/p' <<<"$subtitle" )"
-		episode="$( sed 's/Avsnitt [0-9]*: //' <<<"$subtitle" )"
-	fi
-	epoch="$( sed 's/\([0-9]*\)-\([0-9]*\)-\([0-9]*\)T\([0-9]*:[0-9]*:[0-9]*\)+.*/\3.\2.\1 \4/' <<<"$releaseDate" | txtime-epoch )"
+	epno="$( sed -n 's/Kausi [0-9]*, \([0-9]*\).*/\1/p' <<<"$title" )"
+	episode="$( sed 's/Kausi [0-9]*, [0-9/]*[.] //' <<<"$title" )"
 	thumb="https://images.cdn.yle.fi/image/upload/w_940,dpr_1.0,fl_lossy,f_auto,q_auto,fl_progressive,d_yle-areena.jpg/v1494648649/${image}.jpg"
 
 	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
-	snno="$( kauden-numero <<<"$subtitle" )"
+	snno="$( kauden-numero <<<"$title" )"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
 		# aseta radio-ohjelman nimi albumin nimeksi
 		album="$programme"
 		# aseta radio-ohjelman jakson nimi raidan nimeksi
-		title="$subtitle"
+		title="$title"
 		#title="$( sed -n '/title:/ s/.*'\''\(.*\)'\''.*/\1/p' <<<"$metadata" )"
 		# etsi sopiva AAC-koodekki ja aseta mp3-ääni koodattavaksi aac-muotoon
 		if [ -n "$( ffmpeg -codecs 2>/dev/null |grep libfaac )" ]; then audio_recode="-acodec libfaac"
@@ -640,46 +648,44 @@ function hae-ohjelmat-lahteineen {
 	done
 }
 function hae-jaksot {
-	local source link cache
-	source="$1"
-	link="$2"
+	local lahde linkki valimuisti
+	lahde="$1"
+	linkki="$2"
 
-	cache="${tmp}/valimuisti/${source}-${link##*[/=]}-episodes.txt"
-	cat "${cache}" 2>/dev/null && return 0
+	valimuisti="${tmp}/valimuisti/${lahde}-${linkki##*[/=]}-episodes.txt"
+	cat "${valimuisti}" 2>/dev/null && return 0
 	[ -d "${tmp}/valimuisti" ] || return 1
 
-	case $source in
-	 areena) areena-jaksot fi "$link" ;;
-	 arenan) areena-jaksot sv "$link" ;;
-	 ruutu-sarja) ruutu-jaksot "sarja" "$link" ;;
-	 ruutu-elokuva) ruutu-jaksot "elokuva" "$link" ;;
-	 katsomo) katsomo-jaksot "$link" ;;
-	 *) echo "*** OHJELMAVIRHE: source=\"${source}\" ***" >&2; exit -1 ;;
+	shift
+	case $lahde in
+	 areena|arenan) areena-jaksot "$@" ;;
+	 ruutu-sarja) ruutu-jaksot "sarja" "$@" ;;
+	 ruutu-elokuva) ruutu-jaksot "elokuva" "$@" ;;
+	 katsomo) katsomo-jaksot "$@" ;;
+	 *) echo "*** hae-jaksot: lähde=\"${lahde}\" ***" >&2; exit -1 ;;
 	# suodatetaan pois useaan kertaan esiintyvät jakson linkit
-	esac | awk '!x[$0]++' | tee "${cache}"
+	esac | awk '!x[$0]++' | tee "${valimuisti}"
 }
 function jaksotunnus {
-	local link
-	link="$1"
+	local linkki
+	linkki="$1"
 
-	case "$( sed 's#https*://\([^/]*\).*#\1#' <<<"$link" )" in
-	 areena.yle.fi) areena-jaksotunnus fi "$@" ;;
-	 arenan.yle.fi) areena-jaksotunnus sv "$@" ;;
+	case "$( sed 's#https*://\([^/]*\).*#\1#' <<<"$linkki" )" in
+	 areena.yle.fi) areena-jaksotunnus "$@" ;;
 	 www.ruutu.fi) ruutu-jaksotunnus "$@" ;;
 	 api.katsomo.fi) katsomo-jaksotunnus "$@" ;;
-	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
+	 *) echo "*** jaksotunnus: linkki=\"${linkki}\" ***" >&2; exit -2 ;;
 	esac
 }
 function latain {
-	local link
-	link="$1"
+	local linkki
+	linkki="$1"
 
-	case "$( sed 's#https*://\([^/]*\).*#\1#' <<<"$link" )" in
-	 areena.yle.fi) areena-latain fi "$@" ;;
-	 arenan.yle.fi) areena-latain sv "$@" ;;
+	case "$( sed 's#https*://\([^/]*\).*#\1#' <<<"$linkki" )" in
+	 areena.yle.fi) areena-latain "$@" ;;
 	 www.ruutu.fi) ruutu-latain "$@" ;;
 	 api.katsomo.fi) katsomo-latain "$@" ;;
-	 *) echo "*** OHJELMAVIRHE: link=\"${link}\" ***" >&2; exit -2 ;;
+	 *) echo "*** latain: linkki=\"${linkki}\" ***" >&2; exit -2 ;;
 	esac
 }
 
