@@ -23,14 +23,15 @@ latausyritykset=3
 # yle-dl-vivut
 yle_dl_vivut=()
 
+# käyttäjäagentti
+OSX_agentti="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_3) AppleWebKit/604.5.6 (KHTML, like Gecko) Version/11.0.3 Safari/604.5.6"
+
 # alkuasetus-, metatiedon asetus- ja viimeistelyskripti
 profile_skripti="${kanta}/profile"
 meta_skripti="${kanta}/meta.sh"
 finish_skripti="${kanta}/finish.sh"
 
-# käyttäjäagentit, bash-liput
-OSX_agentti="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/600.3.10 (KHTML, like Gecko) Version/8.0.3 Safari/600.3.10"
-iOS_agentti="Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25"
+# asetetaan bash-liput
 shopt -s extglob
 shopt -s nullglob
 shopt -s nocasematch
@@ -222,7 +223,7 @@ function lataa-segmentit {
 	# lataa enintään 10000 videosegmenttiä (~ 10Gt)
 	for seg in $( seq ${begin} 9999 )
 	 do
-		curl --fail --retry "$latausyritykset" -L -N -s -A "${iOS_agentti}" "${prefix}${seg}${postfix}" || break
+		curl --fail --retry "$latausyritykset" -L -N -s -A "${OSX_agentti}" "${prefix}${seg}${postfix}" || break
 	done
 }
 function meta-kirjoitin {
