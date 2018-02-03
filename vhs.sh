@@ -1,6 +1,6 @@
 #!/bin/bash
 
-script_version=1.4.4
+skriptin_versio=1.4.5
 
 #######
 # ASETUKSET
@@ -780,9 +780,9 @@ function nayta-komennot {
 }
 
 function nayta-ohje {
-	echo "vhs.sh [versio $script_version] : automaattinen internet-tv-tallentaja"
+	echo "vhs.sh [versio ${skriptin_versio}] : automaattinen internet-tv-tallentaja"
 	echo
-	echo "Tuetut palvelut: YLE Areena (TV ja radio), Nelonen Ruutu, MTV Katsomo ja TV5"
+    echo "Tuetut palvelut: YLE Areena, Nelonen Ruutu, (MTV Katsomo : vain metatiedot)"
 	echo
 	echo "Käytössä ovat seuraavat komennot, joissa 'regex' viittaa ohjelman nimeen :"
 	nayta-komennot
@@ -801,13 +801,13 @@ function tulkki {
 	[ -n "$cmd" ] || return 0
 
 	case "$cmd" in
-	 p|prog)
+	 p)
 		hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
 			printf "%15s %s\n" "[$source]" "$( poista_ikarajamerkinta <<<"$title" )"
 		done
 		;;
-	 e|ep)
+	 e)
 		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
 			episodes="$( hae-jaksot "$source" "$link" | wc -l )"
@@ -816,7 +816,7 @@ function tulkki {
 			echo
 		done
 		;;
-	 l|list)
+	 l)
 		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
 			poista_ikarajamerkinta <<<"$title"
@@ -825,7 +825,7 @@ function tulkki {
 			done | cat -n
 		done
 		;;
-	 r|rec)
+	 r)
 		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
 			programme="$( poista_ikarajamerkinta <<<"$title" )"
@@ -837,7 +837,7 @@ function tulkki {
 			done && echo
 		done
 		;;
-	 s|select)
+	 s)
 		exec 3<&0
 		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
@@ -862,7 +862,7 @@ function tulkki {
 		done
 		exec 3<&-
 		;;
-	 m|mark)
+	 m)
 		exec 3<&0
 		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
@@ -895,7 +895,7 @@ function tulkki {
 		done
 		exec 3<&-
 		;;
-	 /|v|vhs)
+	 /|v)
 		echo "Aktiiviset tallentimet:"
 		echo "-----------------------"
 		for recorder in "${vhs}"/*"${tallentimen_paate}"
@@ -908,21 +908,21 @@ function tulkki {
 			echo
 		done
 		;;
-	 +|a|add)
+	 +|a)
 		[ -n "$*" ] && hae-ohjelmat-lahteineen "$*" | while read source link title
 		 do
 			recorder="${vhs}/$( poista_ikarajamerkinta <<<"$title" )${tallentimen_paate}"
 			touch "${recorder}" && echo "+ ${recorder}"
 		done
 		;;
-	 -|d|del)
+	 -|d)
 		[ -n "$*" ] && for recorder in "${vhs}"/*"${tallentimen_paate}"
 		 do
 			programme="$( basename "${recorder}" "${tallentimen_paate}" )"
 			vertaa-lausekkeita "$programme" <<<"$*" && rm "${recorder}" && echo "- ${recorder}"
 		done
 		;;
-	 i|interactive)
+	 i)
 	 	nayta-komennot
 		while read -e -p "vhs.sh> " cmdline
 		 do
