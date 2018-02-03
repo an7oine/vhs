@@ -949,8 +949,8 @@ function tulkki {
 jarjestelmavaatimukset
 
 # vaihda vanhojen tallentimien tiedostopäätteet (.vhs) tarvittaessa
-[ "$tallentimen_paate" != ".vhs" ] && for old_recorder in "${vhs}"/*.vhs
- do mv "$old_recorder" "${old_recorder%.vhs}${tallentimen_paate}"
+[ "$tallentimen_paate" != ".vhs" ] && for vanha_tallennin in "${vhs}"/*.vhs
+ do mv "$vanha_tallennin" "${vanha_tallennin%.vhs}${tallentimen_paate}"
 done
 
 # ei argumentteja: käsittele kaikki tallentimet
@@ -960,13 +960,13 @@ if [ $# -eq 0 ]
 	if [ -n "$( echo "${vhs}"/*${tallentimen_paate} )" ]
 	 then
 		# älä aja automaattitallennusta, jos sessio on jo käynnissä
-		existing_pidfile="$( find -L "${vhs}" -name autorec.pid )"
-		if [ -n "$existing_pidfile" ]
+		pid_tiedosto="$( find -L "${vhs}" -name autorec.pid )"
+		if [ -n "$pid_tiedosto" ]
 		 then
-			if pgrep -F "$existing_pidfile" &>/dev/null
-			 then [ -t 0 ] && echo "Skripti on jo käynnissä: PID $( cat "$existing_pidfile" )" >&2
+			if pgrep -F "$pid_tiedosto" &>/dev/null
+			 then [ -t 0 ] && echo "Skripti on jo käynnissä: PID $( cat "$pid_tiedosto" )" >&2
 				exit 0
-			 else rm -rf "$( dirname "$existing_pidfile" )" &>/dev/null
+			 else rm -rf "$( dirname "$pid_tiedosto" )" &>/dev/null
 			fi
 		fi
 		echo $$ > "${tmp}/autorec.pid"
