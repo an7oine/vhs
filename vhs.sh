@@ -387,50 +387,47 @@ function areena-jaksot {
 	link="$1"
 
 	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
-	jq -r '.data[].id | ("https://areena.yle.fi/" + . + "")' |\
+	jq -r '.data[] | select(.publicationEvent[].media.available) | ("https://areena.yle.fi/" + .id + "")' |\
 	tee "${tmp}/areena-eps"
 }
 function areena-jaksotunnus {
 	local link json title desc epno episode
 	link="$1" # "1-xxxxxxx"
 
-	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/player.api.yle.fi/v1/preview}.json?app_id=player_static_prod&app_key=8930d72170e48303cf5f3867780d549b" |\
-	jq -r '.data.ok_ondemand' )"
-	title="$( jq -r '.title.fin' <<<"${json}" )"
-	desc="$( jq -r '.description.fin' <<<"${json}" )"
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
+	jq -r '.data' )"
+	title="$( jq -r '.title.fi' <<<"${json}" )"
+	desc="$( jq -r '.description.fi' <<<"${json}" )"
 
-	epno="$( sed -n 's/Kausi [0-9]*, \([0-9]*\).*/\1/p' <<<"$title" )"
-	episode="$( sed 's/Kausi [0-9]*, [0-9/]*[.] //' <<<"$title" )"
+	epno="$( jq -r '.episodeNumber' <<<"${json}" )"
+	episode="$( jq -r '.itemTitle.fi' <<<"${json}" )"
 	if [ -n "$epno" ]
 	  then echo "Osa ${epno}: ${episode}. ${desc}"
 	  else echo "${episode}. ${desc}"
 	fi
 }
 function areena-latain {
-	local link programme vivut custom_parser json title desc type releaseDate image agelimit epno episode epoch thumb snno product album title audio_recode
+	local link programme vivut custom_parser json title desc type startTime epoch image thumb agelimit snno epno episode product album audio_recode
 	link="$1"
 	programme="$2"
 	custom_parser="$3"
 
-	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/player.api.yle.fi/v1/preview}.json?app_id=player_static_prod&app_key=8930d72170e48303cf5f3867780d549b" |\
-	jq -r '.data.ok_ondemand' )"
-	title="$( jq -r '.title.fin' <<<"${json}" )"
-	desc="$( jq -r '.description.fin' <<<"${json}" )"
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
+	jq -r '.data' )"
+	title="$( jq -r '.title.fi' <<<"${json}" )"
+	desc="$( jq -r '.description.fi' <<<"${json}" )"
 	type="$( jq -r '.type' <<<"${json}" )"
 
-	#releaseDate="$( jq -r '.labels[] | select(.type == "releaseDate").raw' <<<"${json}" )"
-	#epoch="$( sed 's/\([0-9]*\)-\([0-9]*\)-\([0-9]*\)T\([0-9]*:[0-9]*:[0-9]*\)+.*/\3.\2.\1 \4/' <<<"$releaseDate" | txtime-epoch )"
-	epoch=$( date +%s )
+	startTime="$( jq -r '.publicationEvent[0].startTime' <<<"${json}" )"
+	epoch="$( sed 's/\([0-9]*\)-\([0-9]*\)-\([0-9]*\)T\([0-9]*:[0-9]*:[0-9]*\)+.*/\3.\2.\1 \4/' <<<"$startTime" | txtime-epoch )"
 
 	image="$( jq -r '.image.id' <<<"${json}" )"
-	agelimit="$( jq -r '.content_rating.ageRestriction' <<<"${json}" )"
-
-	epno="$( sed -n 's/Kausi [0-9]*, \([0-9]*\).*/\1/p' <<<"$title" )"
-	episode="$( sed 's/Kausi [0-9]*, [0-9/]*[.] //' <<<"$title" )"
 	thumb="https://images.cdn.yle.fi/image/upload/w_940,dpr_1.0,fl_lossy,f_auto,q_auto,fl_progressive,d_yle-areena.jpg/v1494648649/${image}.jpg"
 
-	# yritetään tulkita jakson kuvauksessa numeroin tai sanallisesti ilmaistu kauden numero
-	snno="$( kauden-numero <<<"$title" )"
+	agelimit="$( jq -r '.contentRating.ageRestriction' <<<"${json}" )"
+	snno="$( jq -r '.partOfSeason.seasonNumber' <<<"${json}" )"
+	epno="$( jq -r '.episodeNumber' <<<"${json}" )"
+	episode="$( jq -r '.itemTitle.fi' <<<"${json}" )"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
