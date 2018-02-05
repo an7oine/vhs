@@ -387,7 +387,7 @@ function areena-jaksot {
 	link="$1"
 
 	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
-	jq -r '.data[] | select(.publicationEvent[].media.available) | ("https://areena.yle.fi/" + .id + "")' |\
+	jq -r '.data[] | select(.publicationEvent[].temporalStatus == "currently") | ("https://areena.yle.fi/" + .id + "")' |\
 	tee "${tmp}/areena-eps"
 }
 function areena-jaksotunnus {
@@ -399,8 +399,8 @@ function areena-jaksotunnus {
 	title="$( jq -r '.title.fi' <<<"${json}" )"
 	desc="$( jq -r '.description.fi' <<<"${json}" )"
 
-	epno="$( jq -r '.episodeNumber' <<<"${json}" )"
-	episode="$( jq -r '.itemTitle.fi' <<<"${json}" )"
+	epno="$( jq -r '.episodeNumber | select(.)' <<<"${json}" )"
+	episode="$( jq -r '.itemTitle.fi | select(.)' <<<"${json}" )"
 	if [ -n "$epno" ]
 	  then echo "Osa ${epno}: ${episode}. ${desc}"
 	  else echo "${episode}. ${desc}"
@@ -426,8 +426,8 @@ function areena-latain {
 
 	agelimit="$( jq -r '.contentRating.ageRestriction' <<<"${json}" )"
 	snno="$( jq -r '.partOfSeason.seasonNumber' <<<"${json}" )"
-	epno="$( jq -r '.episodeNumber' <<<"${json}" )"
-	episode="$( jq -r '.itemTitle.fi' <<<"${json}" )"
+	epno="$( jq -r '.episodeNumber | select(.)' <<<"${json}" )"
+	episode="$( jq -r '.itemTitle.fi | select(.)' <<<"${json}" )"
 
 	if [ "$type" = "audio" ]
 	 then product="${tmp}/vhs.m4a"
