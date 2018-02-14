@@ -453,7 +453,7 @@ function areena-latain {
 	. $custom_parser || return 101
 	echo
 
-	if [ ${#yle_dl_vivut[@]} -eq 0 ]
+	if ! [ ${#yle_dl_vivut[@]} -eq 0 ]
          then vivut+="${yle_dl_vivut[@]}"
 	fi
 
@@ -475,6 +475,9 @@ function areena-latain {
 
 		# aja em. komento
 		ffmpeg "${FFMPEG_alku[@]}" "${FFMPEG_loppu[@]}" "${product}" -y &> /dev/fd/6 || return 20
+
+                # poista tekstitystiedostot
+		rm ${tmp}/vhs.*.srt
 	fi
 
 	meta-kirjoitin "${product}" &> /dev/fd/6
