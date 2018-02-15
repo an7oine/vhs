@@ -554,7 +554,7 @@ function ruutu-latain {
 	if ! [ -s "${product}" ]
 	 then
 		# lataa m3u8-muotoinen aineisto
-		ffmpeg -i "${m3u8_source}" -bsf:a aac_adtstoasc -c copy -map 0:4 -map 0:5 -y "${tmp}/presync.m4v" &> /dev/fd/6 || return 10
+		ffmpeg -i "${m3u8_source}" -bsf:a aac_adtstoasc -c copy -y "${tmp}/presync.m4v" &> /dev/fd/6 || return 10
 		# siirrä ääniraitaa eteenpäin 3 ruutua (0,12 s)
 		ffmpeg -i "${tmp}/presync.m4v" -itsoffset 0.120 -i "${tmp}/presync.m4v" -c copy -map 0:0 -map 1:1 -y "${product}" &> /dev/fd/6 || return 20
 		rm "${tmp}/presync.m4v"
