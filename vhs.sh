@@ -404,7 +404,8 @@ function areena-jaksotunnus {
 	if [ -n "$epno" ]
 	  then echo "Osa ${epno}: ${episode}. ${desc}"
 	  else echo "${episode}. ${desc}"
-	fi
+	fi | tr $'\n' ' '
+	echo
 }
 function areena-latain {
 	local link programme vivut custom_parser json title desc type startTime epoch image thumb agelimit snno epno episode product album audio_recode
