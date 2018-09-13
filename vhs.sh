@@ -490,9 +490,9 @@ function areena-latain {
 
 function ruutu-ohjelmat {
 	valimuistihaku "${OSX_agentti}" http://www.ruutu.fi/ohjelmat/kaikki |\
-	sed -n '\#<a class="[^"]*" href="/[^/]*/[^/]*"># {N;N;N;N;s#.*<a class="[^"]*" href="/\([^/"]*/[^/"]*\)">.*<span class="mdc-list-item__text__primary">. *\([^<]*\) *</span>.*#ruutu-sarja \1 \2#p;}'
+	sed -n '\#href="/ohjelmat/[^/]*"># {N;N;N;N;N;s#.* href="/\(ohjelmat/[^/"]*\)">.*<span class="mdc-list-item__text__primary">.*<span> *. *\([^<]*\) *</span>.*#ruutu-sarja \1 \2#p;}'
 	valimuistihaku "${OSX_agentti}" http://www.ruutu.fi/ohjelmat/elokuvat |\
-	sed -n '\#<a class="[^"]*" href="/video/[0-9]*"># {N;N;N;N;N;N;N;s#.*<a class="[^"]*" href="/\(video/[0-9]*\)">.*<h1 class="ruutu-card__title">. *\([^<]*\) *</h1>.*#ruutu-elokuva \1 \2#p;}'
+	sed -n '\#<a class="[^"]*" href="/video/[0-9]*"># {N;N;N;N;N;N;N;s#.*<a class="[^"]*" href="/\(video/[0-9]*\)">.*<h2 class="ruutu-card__title">. *\([^<]*\) *</h2>.*#ruutu-elokuva \1 \2#p;}'
 }
 function ruutu-jaksot {
 	local type link
