@@ -489,34 +489,36 @@ function areena-latain {
 # NELONEN RUUTU
 
 function ruutu-ohjelmat {
-	valimuistihaku "${OSX_agentti}" http://www.ruutu.fi/ohjelmat/kaikki |\
-	sed -n '\#href="/ohjelmat/[^/]*"># {N;N;N;N;N;s#.* href="/\(ohjelmat/[^/"]*\)">.*<span class="mdc-list-item__text__primary">.*<span> *. *\([^<]*\) *</span>.*#ruutu-sarja \1 \2#p;}'
-	valimuistihaku "${OSX_agentti}" http://www.ruutu.fi/ohjelmat/elokuvat |\
-	sed -n '\#<a class="[^"]*" href="/video/[0-9]*"># {N;N;N;N;N;N;N;s#.*<a class="[^"]*" href="/\(video/[0-9]*\)">.*<h2 class="ruutu-card__title">. *\([^<]*\) *</h2>.*#ruutu-elokuva \1 \2#p;}'
+	valimuistihaku "${OSX_agentti}" https://www.ruutu.fi/ohjelmat/kaikki \
+	| tr '<' $'\n' \
+	| sed -n 's#.*title="\([^"]*\)" href="/\(ohjelmat/[^"]*\)".*#ruutu-sarja \2 \1#p'
+	valimuistihaku "${OSX_agentti}" https://www.ruutu.fi/ohjelmat/elokuvat \
+	| tr '<' $'\n' \
+	| sed -n 's#.*title="\([^"]*\)" href="/\(video/[^"]*\)".*#ruutu-elokuva \2 \1#p'
 }
 function ruutu-jaksot {
 	local type link
 	type="$1"
 	link="$2"
 	if [ "$type" = "sarja" ]
-	 then valimuistihaku "${OSX_agentti}" "http://www.ruutu.fi/${link}" |\
-		sed -n 's#.*"/video/\([0-9]\{1,\}\)".*#\1#p' |\
+	 then valimuistihaku "${OSX_agentti}" "https://www.ruutu.fi/${link}" \
+		| tr '&' $'\n' \
+		| sed -n 's#^quot;/video/\([0-9]*\)$#\1#p' |\
 		while read ep
-		 do [ -n "$( valimuistihaku "${OSX_agentti}" "http://gatling.nelonenmedia.fi/media-xml-cache?id=${ep}" | tulkitse-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "http://www.ruutu.fi/video/${ep}"
+		 do [ -n "$( valimuistihaku "${OSX_agentti}" "https://gatling.nelonenmedia.fi/media-xml-cache?id=${ep}" | tulkitse-html | grep '<MediaType>video_episode</MediaType>' )" ] && echo "https://www.ruutu.fi/video/${ep}"
 		done
-	 else echo "http://www.ruutu.fi/${link}"
+	 else echo "https://www.ruutu.fi/${link}"
 	fi
 }
 function ruutu-jaksotunnus {
 	local link html_metadata epid metadata episode desc
 	link="$1"
 	html_metadata="$( valimuistihaku "${OSX_agentti}" "${link}" | tulkitse-html )"
-	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
-	og_desc="$( sed -n 's#<meta property=\"og:description\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
-	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]*.*/\1/p' <<<"$og_title" )"
-	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\).*/\1/p' <<<"$og_title" )"
-	episode="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] //; s/\([^.!?]*[!?]\{0,1\}\).*/\1/' <<<"$og_desc" )"
-	desc="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] [^.!?]*[.!?] //' <<<"$og_desc" )"
+	og_desc="$( sed -n 's#.*property="og:description" content="\([^"]*\)".*#\1#p' <<<"$html_metadata" )"
+	snno="$( sed -n 's/Kausi \([0-9]*\). Jakso [0-9]*.*/\1/p' <<<"$og_desc" )"
+	epno="$( sed -n 's/Kausi [0-9]*. Jakso \([0-9]*\).*/\1/p' <<<"$og_desc" )"
+	episode="$( sed 's/Kausi [0-9]*. Jakso [0-9]*\/[0-9]*. //; s/\([^.!?]*[!?]\{0,1\}\).*/\1/' <<<"$og_desc" )"
+	desc="$( sed 's/Kausi [0-9]*. Jakso [0-9]*\/[0-9]*. [^.!?]*[.!?] //' <<<"$og_desc" )"
 	echo "Osa ${epno} (kausi ${snno}): ${episode}. ${desc}"
 }
 function ruutu-latain {
@@ -526,15 +528,15 @@ function ruutu-latain {
 	custom_parser="$3"
 
 	html_metadata="$( valimuistihaku "${OSX_agentti}" "${link}" | tulkitse-html )"
-	og_title="$( sed -n 's#<meta property=\"og:title\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
-	og_desc="$( sed -n 's#<meta property=\"og:description\" content=\"\(.*\)\" />#\1#p' <<<"$html_metadata" )"
-	snno="$( sed -n 's/.* - Kausi \([0-9]*\) - Jakso [0-9]*.*/\1/p' <<<"$og_title" )"
-	epno="$( sed -n 's/.* - Kausi [0-9]* - Jakso \([0-9]*\).*/\1/p' <<<"$og_title" )"
-	episode="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] //; s/\([^.!?]*[!?]\{0,1\}\).*/\1/' <<<"$og_desc" )"
-	desc="$( sed 's/Kausi [0-9]*[.] Jakso [0-9]*\/[0-9]*[.] [^.!?]*[.!?] //' <<<"$og_desc" )"
+	og_title="$( sed -n 's#.*property="og:titlt" content="\([^"]*\)".*#\1#p' <<<"$html_metadata" )"
+	og_desc="$( sed -n 's#.*property="og:description" content="\([^"]*\)".*#\1#p' <<<"$html_metadata" )"
+	snno="$( sed -n 's/Kausi \([0-9]*\). Jakso [0-9]*.*/\1/p' <<<"$og_desc" )"
+	epno="$( sed -n 's/Kausi [0-9]*. Jakso \([0-9]*\).*/\1/p' <<<"$og_desc" )"
+	episode="$( sed 's/Kausi [0-9]*. Jakso [0-9]*\/[0-9]*. //; s/\([^.!?]*[!?]\{0,1\}\).*/\1/' <<<"$og_desc" )"
+	desc="$( sed 's/Kausi [0-9]*. Jakso [0-9]*\/[0-9]*. [^.!?]*[.!?] //' <<<"$og_desc" )"
 
 	epid="${link##*/}"
-	metadata="$( valimuistihaku "${OSX_agentti}" "http://gatling.nelonenmedia.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
+	metadata="$( valimuistihaku "${OSX_agentti}" "https://gatling.nelonenmedia.fi/media-xml-cache?id=${epid}" | iconv -f ISO-8859-1 )"
 	
 	#bitrates="$( hae-xml-kentta //Playerdata/Clip/BitRateLabels/map bitrate <<<"$metadata" )"
 	#source="$( hae-xml-sisalto //Playerdata/Clip/HTTPMediaFiles/HTTPMediaFile <<<"$metadata" | sed 's/_[0-9]*\(_[^_]*.mp4\)/_@@@@\1/' )"
