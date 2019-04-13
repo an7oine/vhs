@@ -26,6 +26,12 @@ yle_dl_vivut=()
 # käyttäjäagentti
 OSX_agentti="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_3) AppleWebKit/604.5.6 (KHTML, like Gecko) Version/11.0.3 Safari/604.5.6"
 
+# Areena-kirjautumisavain
+areena_tunnus="$(
+  curl -s "${OSX_agentti}" "https://areena.yle.fi/tv/oma" |\
+  sed -n '/applicationId/ {; N; s/.*applicationId: "\([^"]*\)",.*applicationKey: "\([^"]*\)",.*/app_id=\1\&app_key=\2/p; };'
+)"
+
 # alkuasetus-, metatiedon asetus- ja viimeistelyskripti
 profile_skripti="${kanta}/profile"
 meta_skripti="${kanta}/meta.sh"
@@ -354,7 +360,7 @@ function areena-json {
         offset=0
         while true
           do
-            data="$( curl --fail --retry "$latausyritykset" --compressed -L -s -A "${OSX_agentti}" "https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=a-o&language=${lang}&v=7&client=yle-areena-web&app_id=areena_web_personal_prod&app_key=6c64d890124735033c50099ca25dd2fe&limit=${limit}&offset=${offset}" 2>/dev/null | jq -r '.data' )"
+            data="$( curl --fail --retry "$latausyritykset" --compressed -L -s -A "${OSX_agentti}" "https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=a-o&language=${lang}&v=7&client=yle-areena-web&${areena_tunnus}&limit=${limit}&offset=${offset}" 2>/dev/null | jq -r '.data' )"
             if [ $( jq -r '. | length' <<<"$data" ) -eq 0 ]
               then break
             fi
@@ -386,15 +392,15 @@ function areena-jaksot {
 	local link base
 	link="$1"
 
-	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
-	jq -r '.data[] | select(.publicationEvent[].temporalStatus == "currently") | ("https://areena.yle.fi/" + .id + "")' |\
+	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?availability=ondemand&${areena_tunnus}" |\
+	jq -r '.data[] | ("https://areena.yle.fi/" + .id + "")' |\
 	tee "${tmp}/areena-eps"
 }
 function areena-jaksotunnus {
 	local link json title desc epno episode
 	link="$1" # "1-xxxxxxx"
 
-	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?${areena_tunnus}" |\
 	jq -r '.data' )"
 	title="$( jq -r '.title.fi' <<<"${json}" )"
 	desc="$( jq -r '.description.fi' <<<"${json}" )"
@@ -413,7 +419,7 @@ function areena-latain {
 	programme="$2"
 	custom_parser="$3"
 
-	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?app_id=89868a18&app_key=54bb4ea4d92854a2a45e98f961f0d7da" |\
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?${areena_tunnus}" |\
 	jq -r '.data' )"
 	title="$( jq -r '.title.fi' <<<"${json}" )"
 	desc="$( jq -r '.description.fi' <<<"${json}" )"
