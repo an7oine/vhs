@@ -1,6 +1,6 @@
 #!/bin/bash
 
-skriptin_versio=1.4.5
+skriptin_versio=1.5
 
 #######
 # ASETUKSET
