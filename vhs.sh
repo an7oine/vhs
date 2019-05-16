@@ -549,6 +549,12 @@ function ruutu-latain {
 	m3u8_source="$( hae-xml-sisalto //Playerdata/Clip/AppleMediaFiles/AppleMediaFile <<<"$metadata" )"
 	#[ -n "$source" -o -n "$m3u8_source" ] || return 10
 
+       m3u8_source="$(
+         curl -s "https://gatling.nelonenmedia.fi/auth/access/v2?stream=$(
+           php -r "echo urlencode(\"$m3u8_source\");"
+         )&timestamp=$( date +%s )"
+       )"
+
 	epoch="$( hae-xml-kentta //Playerdata/Behavior/Program start_time <<<"$metadata" | sed 's#.$#:00#' | txtime-epoch )"
 	agelimit="$( hae-xml-sisalto //Playerdata/Clip/AgeLimit <<<"$metadata" )"
 	thumb="$( hae-xml-kentta //Playerdata/Behavior/Startpicture href <<<"$metadata" )"
