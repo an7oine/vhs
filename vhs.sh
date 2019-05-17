@@ -453,7 +453,7 @@ function areena-latain {
 	fi
 
         # asetetaan oletusasetukset yle-dl:lle, näitä voidaan muuttaa ohjelmakohtaisesti
-	vivut=("-o" "${tmp}/vhs.flv")
+	vivut=("-o" "${tmp}/vhs.mp4")
 
 	# suoritetaan käyttäjän oma sekä tallentimessa annettu parsimiskoodi
 	if [ -x "${meta_skripti}" ]; then . "${meta_skripti}" || return 100; fi
@@ -470,7 +470,7 @@ function areena-latain {
                 yle-dl "${link}" "${vivut[@]}" &> /dev/fd/6 || return 10
 
 		# muodosta ffmpeg-komento, joka muuntaa videon mp4-muotoon ja lisää siihen suomen- ja ruotsinkieliset tekstit, jos saatavilla
-		FFMPEG_alku=("-i" "${tmp}/vhs.flv")
+		FFMPEG_alku=("-i" "${tmp}/vhs.mp4")
 		FFMPEG_loppu=("-map" "0" "-c:v" "copy" "-c:a" "aac" "-b:a" "192k" "-c:s" "mov_text")
 
 		sindex=0
@@ -484,7 +484,7 @@ function areena-latain {
 		ffmpeg "${FFMPEG_alku[@]}" "${FFMPEG_loppu[@]}" "${product}" -y &> /dev/fd/6 || return 20
 
                 # poista tekstitystiedostot
-		rm ${tmp}/vhs.*.srt
+		rm ${tmp}/vhs.*.srt 2>/dev/null
 	fi
 
 	meta-kirjoitin "${product}" &> /dev/fd/6
