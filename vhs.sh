@@ -26,10 +26,33 @@ yle_dl_vivut=()
 # käyttäjäagentti
 OSX_agentti="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_3) AppleWebKit/604.5.6 (KHTML, like Gecko) Version/11.0.3 Safari/604.5.6"
 
-# Areena-kirjautumisavain
-areena_tunnus="$(
-  curl -s "${OSX_agentti}" "https://areena.yle.fi/tv/oma" |\
-  sed -n '/applicationId/ {; N; s/.*applicationId: "\([^"]*\)",.*applicationKey: "\([^"]*\)",.*/app_id=\1\&app_key=\2/p; };'
+# Areena-kirjautumisavain ohjelmien hakuun.
+areena_ohjelmat_tunnus="$(
+  # Ohjelmien haussa tarvitaan lisäksi `token`-avain.
+  IFS=$'\n' read -d $'\0' data_view main_bundle_js < <(
+    curl -s "https://areena.yle.fi/tv/ohjelmat/kaikki" \
+    | sed -En '
+s#.*class="package-view".*data-view='"'"'(.*)'"'"'></div>#\1#p;
+s#.*<script src="(.*/main-bundle.js[^"]*)".*#\1#p;
+'
+  )
+  echo -n "$(
+    jq -r '.tabs[] | select(.title == "A-Ö").content[].source.uri' \
+    <<<"${data_view}" \
+    | sed -E 's/.*[?&](token=[^&]*).*/\1/'
+  )&"
+  curl -s "https://areena.yle.fi${main_bundle_js}" \
+  | sed -En 's/.*appId:"([^"]*)",appKey:"([^"]*)".*/app_id=\1\&app_key=\2/p'
+)"
+
+# Areena-kirjautumisavain jaksojen yms. hakuun
+areena_jaksohaku_tunnus="$(
+  curl -s "$(
+    curl -s "https://areena.api.yle.fi/v1/ui/content/list?language=fi&v=7&client=yle-areena-web&${areena_ohjelmat_tunnus}&limit=1" \
+    | jq -r '.data[] | (.labels[] | select(.type == "itemId") | ("https://areena.yle.fi/" + .raw))'
+  )" | sed -En 's/.*application(Id|Key): "(.*)".*/\2/p' | {
+    read id; read key; echo "app_id=$id&app_key=$key";
+  }
 )"
 
 # alkuasetus-, metatiedon asetus- ja viimeistelyskripti
@@ -212,13 +235,15 @@ function kauden-numero {
 
 function valimuistihaku {
 	local user_agentti url cache
-	user_agentti="$1"
+	kayttajaagentti="$1"
 	url="$2"
 
-	cache="${tmp}/valimuisti/${url//[^A-Za-z0-9]/-}"
-	cat "$cache" 2>/dev/null && return 0
+	valimuisti="${tmp}/valimuisti/${url//[^A-Za-z0-9]/-}"
+	valimuisti="${valimuisti:0:254}"
+	cat "${valimuisti}" 2>/dev/null && return 0
 
-	curl --fail --retry "$latausyritykset" --compressed -L -s -A "${user_agentti}" "${url}" | tee "$cache"
+	curl --fail --retry "${latausyritykset}" --compressed -L -s \
+	-A "${kayttajaagentti}" "${url}" | tee "${valimuisti}"
 }
 function lataa-segmentit {
 	local prefix postfix begin seg
@@ -360,7 +385,12 @@ function areena-json {
         offset=0
         while true
           do
-            data="$( curl --fail --retry "$latausyritykset" --compressed -L -s -A "${OSX_agentti}" "https://areena.api.yle.fi/v1/ui/packages/30-488/contentbytab?o=a-o&language=${lang}&v=7&client=yle-areena-web&${areena_tunnus}&limit=${limit}&offset=${offset}" 2>/dev/null | jq -r '.data' )"
+            data="$(
+              curl --fail --retry "$latausyritykset" --compressed -L -s \
+              -A "${OSX_agentti}" \
+              "https://areena.api.yle.fi/v1/ui/content/list?language=${lang}&v=7&client=yle-areena-web&${areena_ohjelmat_tunnus}&limit=${limit}&offset=${offset}" 2>/dev/null \
+              | jq -r '.data'
+            )"
             if [ $( jq -r '. | length' <<<"$data" ) -eq 0 ]
               then break
             fi
@@ -392,7 +422,7 @@ function areena-jaksot {
 	local link base
 	link="$1"
 
-	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?availability=ondemand&${areena_tunnus}" |\
+	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?availability=ondemand&${areena_jaksohaku_tunnus}" |\
 	jq -r '.data[] | ("https://areena.yle.fi/" + .id + "")' |\
 	tee "${tmp}/areena-eps"
 }
@@ -400,7 +430,7 @@ function areena-jaksotunnus {
 	local link json title desc epno episode
 	link="$1" # "1-xxxxxxx"
 
-	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?${areena_tunnus}" |\
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/areena.yle.fi/api/programs/v1/id}.json?${areena_jaksohaku_tunnus}" |\
 	jq -r '.data' )"
 	title="$( jq -r '.title.fi' <<<"${json}" )"
 	desc="$( jq -r '.description.fi' <<<"${json}" )"
@@ -419,7 +449,7 @@ function areena-latain {
 	programme="$2"
 	custom_parser="$3"
 
-	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/programs-cdn.api.yle.fi/v1/items}.json?${areena_tunnus}" |\
+	json="$( valimuistihaku "${OSX_agentti}" "${link/areena.yle.fi/areena.yle.fi/api/programs/v1/id}.json?${areena_jaksohaku_tunnus}" |\
 	jq -r '.data' )"
 	title="$( jq -r '.title.fi' <<<"${json}" )"
 	desc="$( jq -r '.description.fi' <<<"${json}" )"
