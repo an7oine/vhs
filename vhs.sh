@@ -1,6 +1,6 @@
 #!/bin/bash
 
-skriptin_versio=1.5
+skriptin_versio=1.5.1
 
 #######
 # ASETUKSET
@@ -12,7 +12,7 @@ kanta="${HOME}/.vhs"
 vhs="${HOME}/Movies/vhs"
 
 # valmiit tiedostot sijoitetaan tänne, jos olemassa
-valmis="${HOME}/Movies/tunes"
+valmis="${vhs}/valmiit"
 
 # automaattitallentajien tiedostopääte
 tallentimen_paate=".txt"
