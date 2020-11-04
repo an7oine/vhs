@@ -1,6 +1,6 @@
 #!/bin/bash
 
-skriptin_versio=1.5.1
+skriptin_versio=1.5.2
 
 #######
 # ASETUKSET
@@ -422,7 +422,7 @@ function areena-jaksot {
 	local link base
 	link="$1"
 
-	valimuistihaku "${OSX_agentti}" "https://programs-cdn.api.yle.fi/v1/episodes/${link}.json?availability=ondemand&${areena_jaksohaku_tunnus}" |\
+	valimuistihaku "${OSX_agentti}" "https://areena.yle.fi/api/programs/v1/episodes/${link}.json?availability=ondemand&order=episode.hash%3Aasc%2Cpublication.starttime%3Aasc%2Ctitle.fi%3Aasc&${areena_jaksohaku_tunnus}" |\
 	jq -r '.data[] | ("https://areena.yle.fi/" + .id + "")' |\
 	tee "${tmp}/areena-eps"
 }
@@ -436,7 +436,7 @@ function areena-jaksotunnus {
 	desc="$( jq -r '.description.fi' <<<"${json}" )"
 
 	epno="$( jq -r '.episodeNumber | select(.)' <<<"${json}" )"
-	episode="$( jq -r '.itemTitle.fi | select(.)' <<<"${json}" )"
+	episode="$( jq -r '.title.fi | select(.)' <<<"${json}" )"
 	if [ -n "$epno" ]
 	  then echo "Osa ${epno}: ${episode}. ${desc}"
 	  else echo "${episode}. ${desc}"
